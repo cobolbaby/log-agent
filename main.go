@@ -4,6 +4,7 @@ import (
 	// 需在此处添加代码。[1]
 	"flag"
 	"fmt"
+	"github.com/radovskyb/watcher"
 )
 
 func init() {
@@ -12,8 +13,7 @@ func init() {
 
 func main() {
 	// 需在此处添加代码。[3]
-	var name = *flag.String("name", "everyone", "The greeting object.")
-	// name := *flag.String("name", "everyone", "The greeting object.")
+	name := *flag.String("name", "everyone", "The greeting object.")
 
 	flag.Parse()
 	fmt.Printf("Hello, %s!\n", name)
