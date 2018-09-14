@@ -1,7 +1,9 @@
 package command
 
-import "fmt"
+import (
+	"fmt"
+)
 
-func Status(cfg map[string]string) {
+func Status() {
 	fmt.Println("CheckService")
 }

@@ -1,7 +1,9 @@
 package command
 
-import "fmt"
+import (
+	"fmt"
+)
 
-func Stop(cfg map[string]string) {
+func Stop() {
 	fmt.Println("Stop")
 }

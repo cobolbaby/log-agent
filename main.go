@@ -2,9 +2,8 @@ package main
 
 import (
 	// 需在此处添加代码。[1]
-	Cmd "./command"
-	Util "./util"
 	"fmt"
+	"github.com/cobolbaby/log-agent/command"
 	"os"
 )
 
@@ -13,17 +12,8 @@ const INFO_HELP = `
 	help message2
 `
 
-var appCfg map[string]string
-
 func init() {
-	// 加载配置文件(加载本地配置文件)
-	filename := "./conf/agent.ini"
-	err := Util.LoadCfg("INI", filename)
-	if err != nil {
-		fmt.Printf("Load the configuration error. [error=%v]\n", err)
-		panic("Failed to Load configuration.Please make sure that the configuration exists")
-	}
-	fmt.Printf("loadConf()...\n")
+
 }
 
 func main() {
@@ -38,11 +28,11 @@ func main() {
 	case "help", "-h":
 		fmt.Println(INFO_HELP)
 	case "start":
-		Cmd.Start(appCfg)
+		command.Start()
 	case "stop":
-		Cmd.Stop(appCfg)
+		command.Stop()
 	case "status":
-		Cmd.Status(appCfg)
+		command.Status()
 	default:
 		fmt.Println(INFO_HELP)
 	}

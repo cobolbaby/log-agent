@@ -30,5 +30,5 @@
   unused-packages = true
 
 [[constraint]]
-  name = "github.com/radovskyb/watcher"
-  version = "1.0.2"
+  name = "github.com/astaxie/beego"
+  version = "1.10.1"

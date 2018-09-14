@@ -1,13 +1,13 @@
 package command
 
-import "fmt"
+import (
+	. "github.com/cobolbaby/log-agent/utils"
+)
 
-func Start(cfg map[string]string) {
-	fmt.Println("Run")
+func Start() {
+	LogMgr().Info("LogAgent Monitor Switch State: %s :)", ConfigMgr().String("agent::switch"))
 
 	// 支持添加至系统开机启动脚本中
-
-	// 加载配置文件(加载本地配置文件)
 
 	// 连接消息总线，维持长连接(权限校验，心跳维持)
 

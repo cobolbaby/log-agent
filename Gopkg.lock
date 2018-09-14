@@ -2,16 +2,22 @@
 
 
 [[projects]]
-  digest = "1:0665976cc6d8c2e60dafca32820b6b7eca70f37ded0bcccc103388e1c0d05c53"
-  name = "github.com/radovskyb/watcher"
-  packages = ["."]
+  digest = "1:7e8f18bb1dfab0892cec35833aed551f17047aa376b1ae23d6d3fe964e7afce6"
+  name = "github.com/astaxie/beego"
+  packages = [
+    "config",
+    "logs",
+  ]
   pruneopts = "UT"
-  revision = "6145e1439b9de93806925353403f91d2abbad8a5"
-  version = "v1.0.2"
+  revision = "053a075344c118a5cc41981b29ef612bb53d20ca"
+  version = "v1.10.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  input-imports = ["github.com/radovskyb/watcher"]
+  input-imports = [
+    "github.com/astaxie/beego/config",
+    "github.com/astaxie/beego/logs",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1
