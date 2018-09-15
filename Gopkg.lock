@@ -12,12 +12,21 @@
   revision = "053a075344c118a5cc41981b29ef612bb53d20ca"
   version = "v1.10.1"
 
+[[projects]]
+  digest = "1:0665976cc6d8c2e60dafca32820b6b7eca70f37ded0bcccc103388e1c0d05c53"
+  name = "github.com/radovskyb/watcher"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "6145e1439b9de93806925353403f91d2abbad8a5"
+  version = "v1.0.2"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
     "github.com/astaxie/beego/config",
     "github.com/astaxie/beego/logs",
+    "github.com/radovskyb/watcher",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

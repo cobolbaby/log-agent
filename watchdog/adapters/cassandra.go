@@ -1,4 +1,4 @@
-package adapters
+package watchdog
 
 import (
 	"fmt"
@@ -13,5 +13,8 @@ func (this *Cassandra) Handle(files []string) error {
 	// getFileMeta
 	// UploadFile
 	fmt.Println(this.Name)
+	for _, v := range files {
+		fmt.Println(v)
+	}
 	return nil
 }

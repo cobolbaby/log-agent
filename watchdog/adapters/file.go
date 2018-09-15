@@ -1,4 +1,4 @@
-package adapters
+package watchdog
 
 import (
 	"fmt"
@@ -12,5 +12,8 @@ func (this *File) Handle(files []string) error {
 	// getFileMeta
 	// mv
 	fmt.Println(this.Name)
+	for _, v := range files {
+		fmt.Println(v)
+	}
 	return nil
 }
