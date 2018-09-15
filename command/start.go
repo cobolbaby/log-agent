@@ -2,6 +2,7 @@ package command
 
 import (
 	. "github.com/cobolbaby/log-agent/utils"
+	"github.com/cobolbaby/log-agent/watchdog"
 )
 
 func Start() {
@@ -16,20 +17,20 @@ func Start() {
 
 	// 连接消息总线，维持长连接(权限校验，心跳维持)
 
-	// 获取最新的配置信息，与本地文件Merge
+	// 订阅最新的配置信息
 
 	// 添加文件处理器(订阅发布者模式)
-	watchdog := Watchdog.create()
+	Watchdog := watchdog.Create()
 
 	// 获取需要监控的文件匹配规则
-	watchdog.setRules(ConfigMgr().Bool("agent::monitored_rule"))
+	Watchdog.SetRules(ConfigMgr().String("agent::watchRules"))
 
 	// Console/Kafka/Cassandra/Ceph
-	watchdog.addHandler("console")
-	watchdog.addHandler("cassandra")
-	watchdog.addHandler("file")
+	Watchdog.AddHandler(watchdog.AdapterConsole)
+	Watchdog.AddHandler(watchdog.AdapterCassandra)
+	Watchdog.AddHandler(watchdog.AdapterFile)
 
 	// 启动监控程序
 	// 调用文件处理方法(模板方法)
-	watchdog.run()
+	Watchdog.Run()
 }
