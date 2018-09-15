@@ -11,7 +11,7 @@ type Console struct {
 func (this *Console) Handle(files []string) error {
 	// getFileMeta
 	// write the filename to stdout
-	fmt.Println(this.Name)
+	fmt.Println(">>>", this.Name)
 	for _, v := range files {
 		fmt.Println(v)
 	}

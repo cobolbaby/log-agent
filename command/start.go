@@ -6,6 +6,15 @@ import (
 )
 
 func Start() {
+	// Recover防止程序挂掉
+	defer func() {
+		err := Recover()
+		if err != nil {
+			LogMgr().Error("Service Restart!!!")
+			return
+		}
+	}()
+
 	agentSwitch, err := ConfigMgr().Bool("agent::switch")
 	if err != nil {
 		LogMgr().Error("undefined agent::switch")
