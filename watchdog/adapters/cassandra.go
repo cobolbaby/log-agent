@@ -2,17 +2,19 @@ package watchdog
 
 import (
 	"fmt"
+	"time"
 )
 
-type Cassandra struct {
+type CassandraAdapter struct {
 	Name string
 }
 
-func (this *Cassandra) Handle(files []string) error {
+func (this *CassandraAdapter) Handle(files []string) error {
 	// getConn
 	// getFileMeta
 	// UploadFile
-	fmt.Println(">>>", this.Name)
+	// time.Sleep(time.Second) // 停顿一秒
+	fmt.Println(">", time.Now(), ">>", this.Name)
 	for _, v := range files {
 		fmt.Println(v)
 	}

@@ -1,19 +1,11 @@
 package watchdog
 
 import (
-	"fmt"
-	. "github.com/cobolbaby/log-agent/watchdog/adapters"
-	"github.com/radovskyb/watcher"
-	"log"
-	"time"
-)
-
-// Name for adapter with beego official support
-const (
-	AdapterConsole   = "Console"
-	AdapterFile      = "File"
-	AdapterCassandra = "Cassandra"
-	// AdapterKafka     = "kafka"
+	// "fmt"
+	// "time"
+	// "github.com/radovskyb/watcher"
+	// "log"
+	"sync"
 )
 
 type FileHandler interface {
@@ -37,25 +29,14 @@ func (this *Watchdog) SetRules(rules string) error {
 	return nil
 }
 
-func (this *Watchdog) AddHandler(adapterName string) error {
-	var adapter FileHandler
-	switch adapterName {
-	case AdapterConsole:
-		adapter = &Console{Name: AdapterConsole}
-	case AdapterFile:
-		adapter = &File{Name: AdapterFile}
-	case AdapterCassandra:
-		adapter = &Cassandra{Name: AdapterCassandra}
-	default:
-		return nil
-	}
+func (this *Watchdog) AddHandler(adapter FileHandler) error {
 	this.adapters = append(this.adapters, adapter)
 	return nil
 }
 
 func (this *Watchdog) Run() {
 	this.listen(func(changeFiles []string) {
-		if len(changeFiles) > 1 {
+		if len(changeFiles) > 0 {
 			this.handle(changeFiles)
 		}
 		// ...
@@ -63,68 +44,76 @@ func (this *Watchdog) Run() {
 }
 
 func (this *Watchdog) listen(callback operator) {
-	// this.rules
-	w := watcher.New()
+	// // this.rules
+	// w := watcher.New()
 
-	// SetMaxEvents to 1 to allow at most 1 event's to be received
-	// on the Event channel per watching cycle.
-	//
-	// If SetMaxEvents is not set, the default is to send all events.
-	w.SetMaxEvents(1)
+	// // SetMaxEvents to 1 to allow at most 1 event's to be received
+	// // on the Event channel per watching cycle.
+	// //
+	// // If SetMaxEvents is not set, the default is to send all events.
+	// w.SetMaxEvents(1)
 
-	// Only notify rename and move events.
-	w.FilterOps(watcher.Rename, watcher.Move)
+	// // Only notify rename and move events.
+	// w.FilterOps(watcher.Rename, watcher.Move)
 
-	go func() {
-		for {
-			select {
-			case event := <-w.Event:
-				fmt.Println(event) // Print the event's info.
-			case err := <-w.Error:
-				log.Fatalln(err)
-			case <-w.Closed:
-				return
-			}
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		select {
+	// 		case event := <-w.Event:
+	// 			fmt.Println(event) // Print the event's info.
+	// 		case err := <-w.Error:
+	// 			log.Fatalln(err)
+	// 		case <-w.Closed:
+	// 			return
+	// 		}
+	// 	}
+	// }()
 
-	// Watch this folder for changes.
-	if err := w.AddRecursive("./test"); err != nil {
-		log.Fatalln(err)
-	}
-
-	// Watch test_folder recursively for changes.
-	// if err := w.AddRecursive("/tmp"); err != nil {
+	// // Watch this folder for changes.
+	// if err := w.AddRecursive("./test"); err != nil {
 	// 	log.Fatalln(err)
 	// }
 
-	// Print a list of all of the files and folders currently
-	// being watched and their paths.
-	for path, f := range w.WatchedFiles() {
-		fmt.Printf("%s: %s\n", path, f.Name())
-	}
+	// // Watch test_folder recursively for changes.
+	// // if err := w.AddRecursive("/tmp"); err != nil {
+	// // 	log.Fatalln(err)
+	// // }
 
-	fmt.Println()
+	// // Print a list of all of the files and folders currently
+	// // being watched and their paths.
+	// for path, f := range w.WatchedFiles() {
+	// 	fmt.Printf("%s: %s\n", path, f.Name())
+	// }
 
-	// Trigger 2 events after watcher started.
-	go func() {
-		w.Wait()
-		w.TriggerEvent(watcher.Create, nil)
-		w.TriggerEvent(watcher.Remove, nil)
-	}()
+	// fmt.Println()
 
-	// Start the watching process - it'll check for changes every 100ms.
-	if err := w.Start(time.Millisecond * 100); err != nil {
-		log.Fatalln(err)
-	}
+	// // Trigger 2 events after watcher started.
+	// go func() {
+	// 	w.Wait()
+	// 	w.TriggerEvent(watcher.Create, nil)
+	// 	w.TriggerEvent(watcher.Remove, nil)
+	// }()
 
-	// files := []string{}
-	// callback(files)
+	// // Start the watching process - it'll check for changes every 100ms.
+	// if err := w.Start(time.Millisecond * 100); err != nil {
+	// 	log.Fatalln(err)
+	// }
+
+	files := []string{"/opt/abc"}
+	callback(files)
 }
 
 func (this *Watchdog) handle(changeFiles []string) error {
+	var wg sync.WaitGroup
 	for _, Adapter := range this.adapters {
-		Adapter.Handle(changeFiles)
+		// Increment the WaitGroup counter.
+		wg.Add(1)
+		go func(fileHandler FileHandler, files []string) {
+			defer wg.Done()
+			fileHandler.Handle(files)
+		}(Adapter, changeFiles)
 	}
+	// Wait for all goroutines to finish.
+	wg.Wait()
 	return nil
 }

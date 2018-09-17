@@ -22,7 +22,7 @@ func main() {
 	args := os.Args
 	if len(args) < 2 {
 		fmt.Println(INFO_HELP)
-		return
+		os.Exit(1)
 	}
 	switch args[1] {
 	case "help", "-h":

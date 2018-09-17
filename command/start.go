@@ -3,6 +3,7 @@ package command
 import (
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
+	. "github.com/cobolbaby/log-agent/watchdog/adapters"
 )
 
 func Start() {
@@ -35,9 +36,9 @@ func Start() {
 	Watchdog.SetRules(ConfigMgr().String("agent::watchRules"))
 
 	// Console/Kafka/Cassandra/Ceph
-	Watchdog.AddHandler(watchdog.AdapterConsole)
-	Watchdog.AddHandler(watchdog.AdapterCassandra)
-	Watchdog.AddHandler(watchdog.AdapterFile)
+	Watchdog.AddHandler(&ConsoleAdapter{Name: "Console"})
+	Watchdog.AddHandler(&CassandraAdapter{Name: "Cassandra"})
+	Watchdog.AddHandler(&FileAdapter{Name: "File"})
 
 	// 启动监控程序
 	// 调用文件处理方法(模板方法)
