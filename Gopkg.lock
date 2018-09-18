@@ -13,12 +13,20 @@
   version = "v1.10.1"
 
 [[projects]]
-  digest = "1:0665976cc6d8c2e60dafca32820b6b7eca70f37ded0bcccc103388e1c0d05c53"
-  name = "github.com/radovskyb/watcher"
+  digest = "1:abeb38ade3f32a92943e5be54f55ed6d6e3b6602761d74b4aab4c9dd45c18abd"
+  name = "github.com/fsnotify/fsnotify"
   packages = ["."]
   pruneopts = "UT"
-  revision = "6145e1439b9de93806925353403f91d2abbad8a5"
-  version = "v1.0.2"
+  revision = "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9"
+  version = "v1.4.7"
+
+[[projects]]
+  branch = "master"
+  digest = "1:6eb2645d74b43d9c87b51947df39f7c668a4f422cd512053f7f6f75bfaad0197"
+  name = "golang.org/x/sys"
+  packages = ["unix"]
+  pruneopts = "UT"
+  revision = "d0be0721c37eeb5299f245a996a483160fc36940"
 
 [solve-meta]
   analyzer-name = "dep"
@@ -26,7 +34,7 @@
   input-imports = [
     "github.com/astaxie/beego/config",
     "github.com/astaxie/beego/logs",
-    "github.com/radovskyb/watcher",
+    "github.com/fsnotify/fsnotify",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

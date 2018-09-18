@@ -1,3 +1,5 @@
+// +build linux
+
 package command
 
 import (
@@ -30,17 +32,11 @@ func Start() {
 	// 订阅最新的配置信息
 
 	// 添加文件处理器(订阅发布者模式)
-	Watchdog := watchdog.Create()
-
 	// 获取需要监控的文件匹配规则
-	Watchdog.SetRules(ConfigMgr().String("agent::watchRules"))
-
+	watchDog := watchdog.Create().SetRules(ConfigMgr().String("agent::watchRules")).SetLogger(LogMgr())
 	// Console/Kafka/Cassandra/Ceph
-	Watchdog.AddHandler(&ConsoleAdapter{Name: "Console"})
-	Watchdog.AddHandler(&CassandraAdapter{Name: "Cassandra"})
-	Watchdog.AddHandler(&FileAdapter{Name: "File"})
-
+	watchDog.AddHandler(&ConsoleAdapter{Name: "Console"}).AddHandler(&CassandraAdapter{Name: "Cassandra"}).AddHandler(&FileAdapter{Name: "File"})
 	// 启动监控程序
 	// 调用文件处理方法(模板方法)
-	Watchdog.Run()
+	watchDog.Run()
 }
