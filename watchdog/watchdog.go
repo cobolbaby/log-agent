@@ -7,31 +7,35 @@ import (
 	"path/filepath"
 )
 
-type FileMeta struct {
-	Filepath      string
-	Dirname        string
-	Filename      string
-	Size          int64
-	Ext      	  string
-	ModifyTime    int32 // ?
-	UploadTime    int32 // ?
-	ChunkData     text  // ?
-	ChunkNo		  int32
-	ChunkSize	  int64
-	Compress      bool
-	CompressSize  int64
-	Checksum      string
-}
-
-type FileHandler interface {
-	Handle(changeFiles []FileMeta) error
-	SetConfig(config string) FileHandler
-}
+const (
+	FILE_MAX_SIZE = 16 * 1024 * 1024 // 16M
+)
 
 type Logger interface {
 	Error(format string, v ...interface{})
 	Warn(format string, v ...interface{})
 	Info(format string, v ...interface{})
+}
+
+type FileMeta struct {
+	Filepath		string
+	Dirname       	string
+	Filename      	string
+	Size          	uint64
+	Ext      	  	string
+	ModifyTime    	uint32
+	UploadTime    	uint32
+	ChunkData     	[]byte
+	ChunkNo		 	uint64
+	ChunkSize	  	uint64
+	Compress      	bool
+	CompressSize  	uint64
+	Checksum      	string
+}
+
+type FileHandler interface {
+	Handle(changeFiles []FileMeta) error
+	SetLogger(logger Logger)
 }
 
 type Watchdog struct {
@@ -64,6 +68,9 @@ func (this *Watchdog) AddHandler(adapter FileHandler) *Watchdog {
 
 func (this *Watchdog) Run() {
 	this.listen(func(changeFiles []string) {
+		
+		// TODO:考虑做一个缓冲队列，然后分批次处理
+
 		if len(changeFiles) > 0 {
 			this.handle(changeFiles)
 		}
@@ -97,16 +104,23 @@ func (this *Watchdog) listen(callback func(queue []string)) error {
 
 func (this *Watchdog) handle(changeFiles []string) error {
 	// 获取changeFiles的metadata
-	changeFilesMeta := this.getFileMeta(changeFiles)
+	changeFilesMeta, err := this.getFileMeta(changeFiles)
+	if err != nil {
+		return err
+	}
 	return this.adapterHandle(changeFilesMeta)
 }
 
-func (this *Watchdog) getFilesMeta(files []string) []FileMeta {
+func (this *Watchdog) getFilesMeta(files []string) ([]FileMeta, error) {
 	filesMeta := []FileMeta
 	for _, fi := range files {
-		filesMeta = append(filesMeta, this.getFileMeta(fi))
+		fileMeta, err := this.getFileMeta(fi)
+		if err != nil {
+			return nil, err
+		}
+		filesMeta = append(filesMeta, fileMeta)
 	}
-	return filesMeta
+	return filesMeta, nil
 }
 
 func (this *Watchdog) getFileMeta(file string) (FileMeta, error) {
@@ -115,8 +129,14 @@ func (this *Watchdog) getFileMeta(file string) (FileMeta, error) {
 		return nil, err
 	}
 	if fileInfo.IsDir() {
-		return nil, errors.New("process only file")
+		return nil, errors.New("[getFileMeta]仅处理文件，忽略目录")
 	}
+
+	// TODO:针对超大文件执行过滤操作
+	if fileInfo.Size() > FILE_MAX_SIZE {
+		return nil, errors.New("[getFileMeta]仅处理小于16M的文件")
+	}
+
 	dirName, fileName := filepath.Split(file)
 	dirName = filepath.Abs(dirName)
 	return &FileMeta{
@@ -126,7 +146,7 @@ func (this *Watchdog) getFileMeta(file string) (FileMeta, error) {
 		Ext:			filepath.Ext(fileName),
 		Size:          	fileInfo.Size(),
 		ModifyTime:    	fileInfo.ModTime(),
-	}
+	}, nil
 }
 
 func (this *Watchdog) adapterHandle(files []FileMeta) error {
@@ -134,10 +154,10 @@ func (this *Watchdog) adapterHandle(files []FileMeta) error {
 	for _, Adapter := range this.adapters {
 		// Increment the WaitGroup counter.
 		wg.Add(1)
-		go func(handler FileHandler, files []FileMeta) {
+		go func(handler FileHandler) {
 			defer wg.Done()
-			handler.Handle(files)
-		}(Adapter, files)
+			handler.SetLogger(this.logger).Handle(files)
+		}(Adapter)
 	}
 	// Wait for all goroutines to finish.
 	wg.Wait()

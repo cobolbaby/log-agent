@@ -33,6 +33,8 @@ func main() {
 		command.Stop()
 	case "status":
 		command.Status()
+	case "install":
+		command.Install()
 	default:
 		fmt.Println(INFO_HELP)
 	}

@@ -10,14 +10,13 @@ import (
 
 func Start() {
 	// Recover防止程序挂掉
-	defer func() {
-		err := Recover()
-		if err != nil {
-			LogMgr().Error("Service Restart!!!")
-			return
-		}
-	}()
-
+	// defer func() {
+	// 	err := Recover()
+	// 	if err != nil {
+	// 		LogMgr().Error("Service Restart!!!")
+	// 		return
+	// 	}
+	// }()
 	agentSwitch, err := ConfigMgr().Bool("agent::switch")
 	if err != nil {
 		LogMgr().Error("undefined agent::switch")
@@ -35,23 +34,20 @@ func Start() {
 	// 获取需要监控的文件匹配规则
 	watchDog := watchdog.Create().SetRules(ConfigMgr().String("agent::watchRules")).SetLogger(LogMgr())
 	// Console/Kafka/Cassandra/Ceph
+	// TODO:如何注入Json结构的配置信息
 	watchDog.AddHandler(&ConsoleAdapter{
-							Name: "Console"
-							Config: {
-								"show": true
-							}
+							Name: "Console",
 						})
 	watchDog.AddHandler(&CassandraAdapter{
-							Name: "Cassandra"
-							Config: {
-								"show": true
+							Name: "Cassandra",
+							Config: &CassandraAdapterCfg{
+								Hosts: 		[]string{"192.168.1.1"},
+								Keyspace:	"dc_agent"
+								TableName:	"spi"
 							}
 						})
 	watchDog.AddHandler(&FileAdapter{
-							Name: "File"
-							Config: {
-								"show": true
-							}
+							Name: "File",
 						})
 	// 启动监控程序
 	// 调用文件处理方法(模板方法)

@@ -27,7 +27,7 @@ func ConfigMgr() config.Configer {
 		panic("Failed to Load configuration. Please make sure that the configuration exists")
 	}
 
-	// TODO::iniCfg如何转化为Map对象
+	// TODO:iniCfg如何转化为Map对象
 	// listenFileStr := conf.String("listen_file")
 	// fileSlice := strings.Split(listenFileStr, ",")
 	// for _, item := range fileSlice {

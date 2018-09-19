@@ -7,12 +7,10 @@ import (
 
 type ConsoleAdapter struct {
 	Name 	string
-	Config 	map[string][interface{}]
+	Config 	ConsoleAdapterCfg
 }
 
-func (this *ConsoleAdapter) SetConfig(config) error {
-	this.Config = config
-	return this
+type ConsoleAdapterCfg struct {
 }
 
 func (this *ConsoleAdapter) Handle(files []FileMeta) error {

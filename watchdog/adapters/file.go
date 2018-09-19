@@ -9,12 +9,10 @@ import (
 
 type FileAdapter struct {
 	Name 	string
-	Config 	map[string][interface{}]
+	Config 	FileAdapterCfg
 }
 
-func (this *FileAdapter) SetConfig(config) error {
-	this.Config = config
-	return this
+type FileAdapterCfg struct {
 }
 
 func (this *FileAdapter) Handle(files []FileMeta) error {
