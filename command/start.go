@@ -35,7 +35,24 @@ func Start() {
 	// 获取需要监控的文件匹配规则
 	watchDog := watchdog.Create().SetRules(ConfigMgr().String("agent::watchRules")).SetLogger(LogMgr())
 	// Console/Kafka/Cassandra/Ceph
-	watchDog.AddHandler(&ConsoleAdapter{Name: "Console"}).AddHandler(&CassandraAdapter{Name: "Cassandra"}).AddHandler(&FileAdapter{Name: "File"})
+	watchDog.AddHandler(&ConsoleAdapter{
+							Name: "Console"
+							Config: {
+								"show": true
+							}
+						})
+	watchDog.AddHandler(&CassandraAdapter{
+							Name: "Cassandra"
+							Config: {
+								"show": true
+							}
+						})
+	watchDog.AddHandler(&FileAdapter{
+							Name: "File"
+							Config: {
+								"show": true
+							}
+						})
 	// 启动监控程序
 	// 调用文件处理方法(模板方法)
 	watchDog.Run()

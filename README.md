@@ -15,9 +15,11 @@ init failed: unable to detect the containing GOPATH: /opt/workspace/git/go-demo/
 - 安装依赖
 
 ```
-$ dep ensure -add github.com/radovskyb/watcher
+$ dep ensure -add github.com/gocql/gocql
 Fetching sources...
-"github.com/radovskyb/watcher" is not imported by your project, and has been temporarily added to Gopkg.lock and vendor/.
-If you run "dep ensure" again before actually importing it, it will disappear from Gopkg.lock and vendor/.
+
+Solving failure: No versions of github.com/fsnotify/fsnotify met constraints:
+	v1.4.7: unable to deduce repository and source type for "golang.org/x/sys/unix": unable to read metadata: go-import metadata not found
+	v1.4.2: Could not introduce github.com/fsnotify/fsnotify@v1.4.2, as it is not allowed by constraint ^1.4.7 from project github.com/cobolbaby/log-agent.
 
 ```
