@@ -35,6 +35,8 @@ func main() {
 		command.Status()
 	case "install":
 		command.Install()
+	case "uninstall":
+		command.Uninstall()
 	default:
 		fmt.Println(INFO_HELP)
 	}

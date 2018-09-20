@@ -1,14 +1,12 @@
 package watchdog
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
-	"errors"
-	"path/filepath"
-)
-
-const (
-	FILE_MAX_SIZE = 16 * 1024 * 1024 // 16M
+	"time"
 )
 
 type Logger interface {
@@ -18,30 +16,30 @@ type Logger interface {
 }
 
 type FileMeta struct {
-	Filepath		string
-	Dirname       	string
-	Filename      	string
-	Size          	uint64
-	Ext      	  	string
-	ModifyTime    	uint32
-	UploadTime    	uint32
-	ChunkData     	[]byte
-	ChunkNo		 	uint64
-	ChunkSize	  	uint64
-	Compress      	bool
-	CompressSize  	uint64
-	Checksum      	string
+	Filepath     string
+	Dirname      string
+	Filename     string
+	Size         int64
+	Ext          string
+	ModifyTime   time.Time
+	UploadTime   time.Time
+	ChunkData    []byte
+	ChunkNo      uint32
+	ChunkSize    uint64
+	Compress     bool
+	CompressSize int64
+	Checksum     string
 }
 
-type FileHandler interface {
+type WatchdogAdapter interface {
 	Handle(changeFiles []FileMeta) error
-	SetLogger(logger Logger)
+	SetLogger(logger Logger) WatchdogAdapter
 }
 
 type Watchdog struct {
 	logger   Logger
 	rules    []string
-	adapters []FileHandler
+	adapters []WatchdogAdapter
 }
 
 func Create() *Watchdog {
@@ -61,20 +59,20 @@ func (this *Watchdog) SetRules(rule string) *Watchdog {
 	return this
 }
 
-func (this *Watchdog) AddHandler(adapter FileHandler) *Watchdog {
+func (this *Watchdog) AddHandler(adapter WatchdogAdapter) *Watchdog {
 	this.adapters = append(this.adapters, adapter)
 	return this
 }
 
 func (this *Watchdog) Run() {
 	this.listen(func(changeFiles []string) {
-		
+
 		// TODO:考虑做一个缓冲队列，然后分批次处理
 
 		if len(changeFiles) > 0 {
 			this.handle(changeFiles)
 		}
-		// ...
+		// TODO:文件读取后的搬移、删除、保留
 	})
 }
 
@@ -104,48 +102,47 @@ func (this *Watchdog) listen(callback func(queue []string)) error {
 
 func (this *Watchdog) handle(changeFiles []string) error {
 	// 获取changeFiles的metadata
-	changeFilesMeta, err := this.getFileMeta(changeFiles)
+	changeFileMetas, err := this.getFileMetas(changeFiles)
 	if err != nil {
 		return err
 	}
-	return this.adapterHandle(changeFilesMeta)
+	return this.adapterHandle(changeFileMetas)
 }
 
-func (this *Watchdog) getFilesMeta(files []string) ([]FileMeta, error) {
-	filesMeta := []FileMeta
+func (this *Watchdog) getFileMetas(files []string) ([]FileMeta, error) {
+	var fileMetas []FileMeta
 	for _, fi := range files {
-		fileMeta, err := this.getFileMeta(fi)
+		fileMeta, err := this.getOneFileMeta(fi)
 		if err != nil {
 			return nil, err
 		}
-		filesMeta = append(filesMeta, fileMeta)
+		fileMetas = append(fileMetas, fileMeta)
 	}
-	return filesMeta, nil
+	return fileMetas, nil
 }
 
-func (this *Watchdog) getFileMeta(file string) (FileMeta, error) {
+func (this *Watchdog) getOneFileMeta(file string) (FileMeta, error) {
 	fileInfo, err := os.Lstat(file)
 	if err != nil {
-		return nil, err
+		return FileMeta{}, err
 	}
 	if fileInfo.IsDir() {
-		return nil, errors.New("[getFileMeta]仅处理文件，忽略目录")
-	}
-
-	// TODO:针对超大文件执行过滤操作
-	if fileInfo.Size() > FILE_MAX_SIZE {
-		return nil, errors.New("[getFileMeta]仅处理小于16M的文件")
+		return FileMeta{}, errors.New("[getOneFileMeta]仅处理文件，忽略目录")
 	}
 
 	dirName, fileName := filepath.Split(file)
-	dirName = filepath.Abs(dirName)
-	return &FileMeta{
-		Filepath:       filepath.Join(dirName, fileName),
-		Dirname:		dirName,
-		Filename:      	fileName,
-		Ext:			filepath.Ext(fileName),
-		Size:          	fileInfo.Size(),
-		ModifyTime:    	fileInfo.ModTime(),
+	dirName, err = filepath.Abs(dirName)
+	if err != nil {
+		return FileMeta{}, err
+	}
+
+	return FileMeta{
+		Filepath:   filepath.Join(dirName, fileName),
+		Dirname:    dirName,
+		Filename:   fileName,
+		Ext:        filepath.Ext(fileName),
+		Size:       fileInfo.Size(),
+		ModifyTime: fileInfo.ModTime(),
 	}, nil
 }
 
@@ -154,9 +151,10 @@ func (this *Watchdog) adapterHandle(files []FileMeta) error {
 	for _, Adapter := range this.adapters {
 		// Increment the WaitGroup counter.
 		wg.Add(1)
-		go func(handler FileHandler) {
+		go func(apdater WatchdogAdapter) {
 			defer wg.Done()
-			handler.SetLogger(this.logger).Handle(files)
+			apdater.SetLogger(this.logger).Handle(files)
+			// apdater.Handle(files)
 		}(Adapter)
 	}
 	// Wait for all goroutines to finish.

@@ -36,19 +36,19 @@ func Start() {
 	// Console/Kafka/Cassandra/Ceph
 	// TODO:如何注入Json结构的配置信息
 	watchDog.AddHandler(&ConsoleAdapter{
-							Name: "Console",
-						})
+		Name: "Console",
+	})
 	watchDog.AddHandler(&CassandraAdapter{
-							Name: "Cassandra",
-							Config: &CassandraAdapterCfg{
-								Hosts: 		[]string{"192.168.1.1"},
-								Keyspace:	"dc_agent"
-								TableName:	"spi"
-							}
-						})
+		Name: "Cassandra",
+		Config: &CassandraAdapterCfg{
+			Hosts:     "10.190.51.89",
+			Keyspace:  "dc_agent",
+			TableName: "spi",
+		},
+	})
 	watchDog.AddHandler(&FileAdapter{
-							Name: "File",
-						})
+		Name: "File",
+	})
 	// 启动监控程序
 	// 调用文件处理方法(模板方法)
 	watchDog.Run()

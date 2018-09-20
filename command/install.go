@@ -10,3 +10,8 @@ func Install() {
 
 	// TODO:初始化数据库
 }
+
+// TODO:服务卸载
+func Uninstall() {
+
+}

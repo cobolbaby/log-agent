@@ -2,20 +2,27 @@ package watchdog
 
 import (
 	"fmt"
-	"io"
-	"os"
+	"github.com/cobolbaby/log-agent/watchdog"
+	// "io"
+	// "os"
 	"time"
 )
 
 type FileAdapter struct {
-	Name 	string
-	Config 	FileAdapterCfg
+	Name   string
+	Config *FileAdapterCfg
+	logger watchdog.Logger
 }
 
 type FileAdapterCfg struct {
 }
 
-func (this *FileAdapter) Handle(files []FileMeta) error {
+func (this *FileAdapter) SetLogger(logger watchdog.Logger) watchdog.WatchdogAdapter {
+	this.logger = logger
+	return this
+}
+
+func (this *FileAdapter) Handle(files []watchdog.FileMeta) error {
 	// getFileMeta
 	// mv
 	// time.Sleep(time.Second) // 停顿一秒
@@ -25,23 +32,6 @@ func (this *FileAdapter) Handle(files []FileMeta) error {
 	}
 	return nil
 }
-
-func copyFile(srcFile string, dstFile string) (writen int64, err error) {
-	f1, err := os.Open(srcFile)
-	if err != nil {
-		return nil, err
-	}
-	defer f1.Close()
-
-	f2, err := os.OpenFile(dstFile, os.O_WRONLY|os.O_CREATE, 0666)
-	if err != nil {
-		return nil, err
-	}
-	defer f2.Close()
-
-	return io.Copy(f1, f2)
-}
-
 
 // // Copy recursively copies the file, directory or symbolic link at src
 // // to dst. The destination must not exist. Symbolic links are not
