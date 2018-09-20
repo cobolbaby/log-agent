@@ -116,27 +116,27 @@ func (this *Watchdog) getFileMetas(files []string) ([]FileMeta, error) {
 		if err != nil {
 			return nil, err
 		}
-		fileMetas = append(fileMetas, fileMeta)
+		fileMetas = append(fileMetas, *fileMeta)
 	}
 	return fileMetas, nil
 }
 
-func (this *Watchdog) getOneFileMeta(file string) (FileMeta, error) {
+func (this *Watchdog) getOneFileMeta(file string) (*FileMeta, error) {
 	fileInfo, err := os.Lstat(file)
 	if err != nil {
-		return FileMeta{}, err
+		return new(FileMeta), err
 	}
 	if fileInfo.IsDir() {
-		return FileMeta{}, errors.New("[getOneFileMeta]仅处理文件，忽略目录")
+		return new(FileMeta), errors.New("[getOneFileMeta]仅处理文件，忽略目录")
 	}
 
 	dirName, fileName := filepath.Split(file)
 	dirName, err = filepath.Abs(dirName)
 	if err != nil {
-		return FileMeta{}, err
+		return new(FileMeta), err
 	}
 
-	return FileMeta{
+	return &FileMeta{
 		Filepath:   filepath.Join(dirName, fileName),
 		Dirname:    dirName,
 		Filename:   fileName,

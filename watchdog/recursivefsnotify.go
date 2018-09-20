@@ -45,7 +45,6 @@ func (w *RecursiveWatcher) RegCallback(callback func(queue []string)) error {
 			return err
 		}
 	}
-	return nil
 }
 
 func (w *RecursiveWatcher) RecursiveAdd(name string) error {
