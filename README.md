@@ -24,7 +24,7 @@ Solving failure: No versions of github.com/fsnotify/fsnotify met constraints:
 
 ```
 
-- `wrong type for SetLogger method`
+- `"X" does not implement "B"(wrong type for method)`
 
 ```
 /opt/workspace/git/go-demo/src/github.com/cobolbaby/log-agent/command/start.go:50:9: cannot use "github.com/cobolbaby/log-agent/watchdog/adapters".FileAdapter literal (type *"github.com/cobolbaby/log-agent/watchdog/adapters".FileAdapter) as type "github.com/cobolbaby/log-agent/watchdog".WatchdogAdapter in argument to watchDog.AddHandler:
