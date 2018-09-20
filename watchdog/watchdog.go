@@ -67,14 +67,15 @@ func (this *Watchdog) AddHandler(adapter WatchdogAdapter) *Watchdog {
 }
 
 func (this *Watchdog) Run() {
+	eventQ := []fsnotify.Event{}
+
 	this.listen(func(changeEvent fsnotify.Event) {
 
 		// TODO:考虑做一个缓冲队列，然后分批次处理
-		// ...
-		changeEvents := []fsnotify.Event{changeEvent}
-
-		if len(changeEvents) > 0 {
-			this.handle(changeEvents)
+		eventQ = append(eventQ, changeEvent)
+		// TODO:setTimeOut
+		if len(eventQ) > 0 {
+			this.handle(eventQ)
 		}
 
 		// TODO:文件读取后的搬移、删除、保留
@@ -89,7 +90,7 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 	}
 	defer watcher.Close()
 
-	// ...
+	// TODO:必要的语法解释
 	done := make(chan bool)
 	go watcher.RegCallback(callback)
 	for _, rule := range this.rules {
@@ -114,9 +115,10 @@ func (this *Watchdog) handle(fileEvents []fsnotify.Event) error {
 	return this.adapterHandle(changeFileMeta)
 }
 
-func (this *Watchdog) getFileMeta(fileEvents []fsnotify.Event) ([]FileMeta, error) {
+func (this *Watchdog) getFileMeta(eventQ []fsnotify.Event) ([]FileMeta, error) {
 	var fileMetas []FileMeta
-	for _, event := range fileEvents {
+	// TODO:并发处理如何用锁
+	for _, event := range eventQ {
 		fileMeta, err := this.getOneFileMeta(event)
 		if err != nil {
 			return nil, err
