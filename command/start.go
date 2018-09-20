@@ -9,14 +9,10 @@ import (
 )
 
 func Start() {
-	// Recover防止程序挂掉
-	// defer func() {
-	// 	err := Recover()
-	// 	if err != nil {
-	// 		LogMgr().Error("Service Restart!!!")
-	// 		return
-	// 	}
-	// }()
+	// 连接消息总线，维持长连接
+	// 获取主机唯一标示，用于辨识Agent
+	// 订阅最新的配置信息
+
 	agentSwitch, err := ConfigMgr().Bool("agent::switch")
 	if err != nil {
 		LogMgr().Error("undefined agent::switch")
@@ -26,18 +22,38 @@ func Start() {
 		LogMgr().Info("LogAgent Monitor Switch State: %s :)", ConfigMgr().String("agent::switch"))
 	}
 
-	// 连接消息总线，维持长连接(权限校验，心跳维持)
+	watchDog := watchdog.Create()
+	watchDog.SetLogger(LogMgr())
+	watchDog.AddHandler(&ConsoleAdapter{Name: "Console"})
 
-	// 订阅最新的配置信息
+	// TODO:根据不同的业务获取不同的配置，同时调用不同的业务
+	startSPIService(watchDog)
+	// TODO:中间件实现，且明确如何做到反射
+	// watchDog.Use(SPIServiceWorker())
 
-	// 添加文件处理器(订阅发布者模式)
-	// 获取需要监控的文件匹配规则
-	watchDog := watchdog.Create().SetRules(ConfigMgr().String("agent::watchRules")).SetLogger(LogMgr())
-	// Console/Kafka/Cassandra/Ceph
-	// TODO:如何注入Json结构的配置信息
-	watchDog.AddHandler(&ConsoleAdapter{
-		Name: "Console",
+	// 启动监控程序
+	watchDog.Run()
+}
+
+func startSPIService(watchDog *watchdog.Watchdog) {
+
+	// TODO:根据不同的业务获取不同的配置，同时调用不同的业务
+	watchDog.SetRules(ConfigMgr().String("agent::watchRules"))
+	// 同步至共享目录
+	watchDog.AddHandler(&FileAdapter{
+		Name: "File",
+		Config: &FileAdapterCfg{
+			Dest: ConfigMgr().String("agent::watchRules"),
+		},
 	})
+	// 备份
+	watchDog.AddHandler(&FileAdapter{
+		Name: "File",
+		Config: &FileAdapterCfg{
+			Dest: ConfigMgr().String("agent::watchRules"),
+		},
+	})
+	// TODO:是否可以注入Json结构的配置信息
 	watchDog.AddHandler(&CassandraAdapter{
 		Name: "Cassandra",
 		Config: &CassandraAdapterCfg{
@@ -46,10 +62,5 @@ func Start() {
 			TableName: "spi",
 		},
 	})
-	watchDog.AddHandler(&FileAdapter{
-		Name: "File",
-	})
-	// 启动监控程序
-	// 调用文件处理方法(模板方法)
-	watchDog.Run()
+
 }

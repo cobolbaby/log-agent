@@ -18,19 +18,18 @@ func NewRecursiveWatcher() (*RecursiveWatcher, error) {
 	return &RecursiveWatcher{watcher}, nil
 }
 
-func (w *RecursiveWatcher) RegCallback(callback func(queue []string)) error {
+func (w *RecursiveWatcher) RegCallback(callback func(event fsnotify.Event)) error {
 	for {
 		select {
 		case event := <-w.Events:
+			// TODO:优化事件触发的时机
 			if event.Op&fsnotify.Create == fsnotify.Create {
 				w.RecursiveAdd(event.Name)
-				changeFiles := []string{event.Name}
-				callback(changeFiles)
+				callback(event)
 				continue
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				changeFiles := []string{event.Name}
-				callback(changeFiles)
+				callback(event)
 				continue
 			}
 			if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
@@ -38,8 +37,7 @@ func (w *RecursiveWatcher) RegCallback(callback func(queue []string)) error {
 				continue
 			}
 			// if event.Op&fsnotify.Write == fsnotify.Write {
-			//  changeFiles := []string{event.Name}
-			// 	callback(changeFiles)
+			// 	callback(event)
 			// }
 		case err := <-w.Errors:
 			return err

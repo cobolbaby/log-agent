@@ -2,6 +2,7 @@ package watchdog
 
 import (
 	"errors"
+	"github.com/fsnotify/fsnotify"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,7 @@ type FileMeta struct {
 	Compress     bool
 	CompressSize int64
 	Checksum     string
+	LastOp       fsnotify.Event
 }
 
 type WatchdogAdapter interface {
@@ -65,18 +67,21 @@ func (this *Watchdog) AddHandler(adapter WatchdogAdapter) *Watchdog {
 }
 
 func (this *Watchdog) Run() {
-	this.listen(func(changeFiles []string) {
+	this.listen(func(changeEvent fsnotify.Event) {
 
 		// TODO:考虑做一个缓冲队列，然后分批次处理
+		// ...
+		changeEvents := []fsnotify.Event{changeEvent}
 
-		if len(changeFiles) > 0 {
-			this.handle(changeFiles)
+		if len(changeEvents) > 0 {
+			this.handle(changeEvents)
 		}
+
 		// TODO:文件读取后的搬移、删除、保留
 	})
 }
 
-func (this *Watchdog) listen(callback func(queue []string)) error {
+func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 	watcher, err := NewRecursiveWatcher()
 	if err != nil {
 		this.logger.Error("[NewRecursiveWatcher]", err)
@@ -88,7 +93,7 @@ func (this *Watchdog) listen(callback func(queue []string)) error {
 	done := make(chan bool)
 	go watcher.RegCallback(callback)
 	for _, rule := range this.rules {
-		this.logger.Info("Listen: ", rule)
+		this.logger.Info("Listen Path: %s", rule)
 		err := watcher.RecursiveAdd(rule)
 		if err != nil {
 			this.logger.Error("[RecursiveAdd]", err)
@@ -100,19 +105,19 @@ func (this *Watchdog) listen(callback func(queue []string)) error {
 	return nil
 }
 
-func (this *Watchdog) handle(changeFiles []string) error {
+func (this *Watchdog) handle(fileEvents []fsnotify.Event) error {
 	// 获取changeFiles的metadata
-	changeFileMetas, err := this.getFileMetas(changeFiles)
+	changeFileMeta, err := this.getFileMeta(fileEvents)
 	if err != nil {
 		return err
 	}
-	return this.adapterHandle(changeFileMetas)
+	return this.adapterHandle(changeFileMeta)
 }
 
-func (this *Watchdog) getFileMetas(files []string) ([]FileMeta, error) {
+func (this *Watchdog) getFileMeta(fileEvents []fsnotify.Event) ([]FileMeta, error) {
 	var fileMetas []FileMeta
-	for _, fi := range files {
-		fileMeta, err := this.getOneFileMeta(fi)
+	for _, event := range fileEvents {
+		fileMeta, err := this.getOneFileMeta(event)
 		if err != nil {
 			return nil, err
 		}
@@ -121,8 +126,8 @@ func (this *Watchdog) getFileMetas(files []string) ([]FileMeta, error) {
 	return fileMetas, nil
 }
 
-func (this *Watchdog) getOneFileMeta(file string) (*FileMeta, error) {
-	fileInfo, err := os.Lstat(file)
+func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error) {
+	fileInfo, err := os.Lstat(fileEvent.Name)
 	if err != nil {
 		return new(FileMeta), err
 	}
@@ -130,7 +135,7 @@ func (this *Watchdog) getOneFileMeta(file string) (*FileMeta, error) {
 		return new(FileMeta), errors.New("[getOneFileMeta]仅处理文件，忽略目录")
 	}
 
-	dirName, fileName := filepath.Split(file)
+	dirName, fileName := filepath.Split(fileEvent.Name)
 	dirName, err = filepath.Abs(dirName)
 	if err != nil {
 		return new(FileMeta), err
@@ -143,6 +148,7 @@ func (this *Watchdog) getOneFileMeta(file string) (*FileMeta, error) {
 		Ext:        filepath.Ext(fileName),
 		Size:       fileInfo.Size(),
 		ModifyTime: fileInfo.ModTime(),
+		LastOp:     fileEvent,
 	}, nil
 }
 
@@ -154,7 +160,6 @@ func (this *Watchdog) adapterHandle(files []FileMeta) error {
 		go func(apdater WatchdogAdapter) {
 			defer wg.Done()
 			apdater.SetLogger(this.logger).Handle(files)
-			// apdater.Handle(files)
 		}(Adapter)
 	}
 	// Wait for all goroutines to finish.

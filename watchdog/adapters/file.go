@@ -1,11 +1,9 @@
 package watchdog
 
 import (
-	"fmt"
 	"github.com/cobolbaby/log-agent/watchdog"
 	// "io"
 	// "os"
-	"time"
 )
 
 type FileAdapter struct {
@@ -15,6 +13,7 @@ type FileAdapter struct {
 }
 
 type FileAdapterCfg struct {
+	Dest string
 }
 
 func (this *FileAdapter) SetLogger(logger watchdog.Logger) watchdog.WatchdogAdapter {
@@ -26,10 +25,6 @@ func (this *FileAdapter) Handle(files []watchdog.FileMeta) error {
 	// getFileMeta
 	// mv
 	// time.Sleep(time.Second) // 停顿一秒
-	fmt.Println(">", time.Now(), ">>", this.Name)
-	for _, v := range files {
-		fmt.Println(v)
-	}
 	return nil
 }
 
