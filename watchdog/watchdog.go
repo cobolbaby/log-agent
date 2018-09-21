@@ -81,7 +81,7 @@ func (this *Watchdog) Run() {
 func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 	watcher, err := NewRecursiveWatcher()
 	if err != nil {
-		this.logger.Error("[NewRecursiveWatcher]", err)
+		this.logger.Error("[NewRecursiveWatcher]%s", err)
 		return err
 	}
 	defer watcher.Close()
@@ -92,7 +92,7 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 		this.logger.Info("Listen Path: %s", rule)
 		err := watcher.RecursiveAdd(rule)
 		if err != nil {
-			this.logger.Error("[RecursiveAdd]", err)
+			this.logger.Error("[RecursiveAdd]%s", err)
 			return err
 		}
 	}
@@ -129,6 +129,7 @@ func (this *Watchdog) debounce(interval time.Duration, cb func(q []fsnotify.Even
 func (this *Watchdog) filterEvents(fileEvents []fsnotify.Event) []fsnotify.Event {
 	var list []fsnotify.Event
 	keys := make(map[string]bool)
+	// TODO:倒序循环，确保list中维持一个最新的事件列表
 	for _, entry := range fileEvents {
 		if _, value := keys[entry.Name]; !value {
 			keys[entry.Name] = true

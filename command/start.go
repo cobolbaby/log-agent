@@ -37,7 +37,6 @@ func Start() {
 
 func startSPIService(watchDog *watchdog.Watchdog) {
 
-	// TODO:根据不同的业务获取不同的配置，同时调用不同的业务
 	watchDog.SetRules(ConfigMgr().String("agent::watchRules"))
 	// 同步至共享目录
 	watchDog.AddHandler(&FileAdapter{
@@ -53,7 +52,6 @@ func startSPIService(watchDog *watchdog.Watchdog) {
 			Dest: ConfigMgr().String("agent::watchRules"),
 		},
 	})
-	// TODO:是否可以注入Json结构的配置信息
 	watchDog.AddHandler(&CassandraAdapter{
 		Name: "Cassandra",
 		Config: &CassandraAdapterCfg{

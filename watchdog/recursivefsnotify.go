@@ -22,7 +22,7 @@ func (w *RecursiveWatcher) RegCallback(callback func(event fsnotify.Event)) erro
 	for {
 		select {
 		case event := <-w.Events:
-			// TODO:优化事件触发的时机
+			// 优化事件触发的时机
 			if event.Op&fsnotify.Create == fsnotify.Create {
 				w.RecursiveAdd(event.Name)
 				callback(event)
