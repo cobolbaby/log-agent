@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+var fsEventQ []fsnotify.Event
+
 type Logger interface {
 	Error(format string, v ...interface{})
 	Warn(format string, v ...interface{})
@@ -67,18 +69,12 @@ func (this *Watchdog) AddHandler(adapter WatchdogAdapter) *Watchdog {
 }
 
 func (this *Watchdog) Run() {
-	eventQ := []fsnotify.Event{}
-
+	// 使用闭包函数优化Debounce函数的生成
+	debounceHandle := this.debounce(3*time.Second, func(events []fsnotify.Event) {
+		this.handle(events)
+	})
 	this.listen(func(changeEvent fsnotify.Event) {
-
-		// TODO:考虑做一个缓冲队列，然后分批次处理
-		eventQ = append(eventQ, changeEvent)
-		// TODO:setTimeOut
-		if len(eventQ) > 0 {
-			this.handle(eventQ)
-		}
-
-		// TODO:文件读取后的搬移、删除、保留
+		debounceHandle(changeEvent)
 	})
 }
 
@@ -90,7 +86,6 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 	}
 	defer watcher.Close()
 
-	// TODO:必要的语法解释
 	done := make(chan bool)
 	go watcher.RegCallback(callback)
 	for _, rule := range this.rules {
@@ -101,12 +96,50 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 			return err
 		}
 	}
+	// 如果done中还没放数据，那main挂起，直到放数据为止
 	<-done
 
 	return nil
 }
 
+func (this *Watchdog) debounce(interval time.Duration, cb func(q []fsnotify.Event)) func(e fsnotify.Event) {
+	timer := time.NewTimer(interval)
+	eventChan := make(chan fsnotify.Event)
+	var e fsnotify.Event
+	go func() {
+		for {
+			select {
+			case e = <-eventChan:
+				fsEventQ = append(fsEventQ, e)
+				timer.Reset(interval)
+			case <-timer.C:
+				if len(fsEventQ) == 0 {
+					break
+				}
+				cb(fsEventQ)
+				fsEventQ = []fsnotify.Event{}
+			}
+		}
+	}()
+	return func(changeEvent fsnotify.Event) {
+		eventChan <- changeEvent
+	}
+}
+
+func (this *Watchdog) filterEvents(fileEvents []fsnotify.Event) []fsnotify.Event {
+	var list []fsnotify.Event
+	keys := make(map[string]bool)
+	for _, entry := range fileEvents {
+		if _, value := keys[entry.Name]; !value {
+			keys[entry.Name] = true
+			list = append(list, entry)
+		}
+	}
+	return list
+}
+
 func (this *Watchdog) handle(fileEvents []fsnotify.Event) error {
+	fileEvents = this.filterEvents(fileEvents)
 	// 获取changeFiles的metadata
 	changeFileMeta, err := this.getFileMeta(fileEvents)
 	if err != nil {
@@ -117,7 +150,6 @@ func (this *Watchdog) handle(fileEvents []fsnotify.Event) error {
 
 func (this *Watchdog) getFileMeta(eventQ []fsnotify.Event) ([]FileMeta, error) {
 	var fileMetas []FileMeta
-	// TODO:并发处理如何用锁
 	for _, event := range eventQ {
 		fileMeta, err := this.getOneFileMeta(event)
 		if err != nil {
