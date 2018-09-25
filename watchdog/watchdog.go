@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"github.com/cobolbaby/log-agent/watchdog/lib"
 )
 
 type Logger interface {
@@ -34,7 +35,7 @@ type FileMeta struct {
 }
 
 type WatchdogAdapter interface {
-	Handle(changeFiles []FileMeta) error
+	Handle(changeFile FileMeta) error
 	SetLogger(logger Logger) WatchdogAdapter
 }
 
@@ -82,6 +83,9 @@ func (this *Watchdog) Listen(handleChan chan fsnotify.Event) error {
 	defer watcher.Close()
 
 	go watcher.NotifyFsEvent(handleChan)
+	// go watcher.NotifyFsEvent(func (e fsnotify.Event)  {
+	// 	handleChan <- e
+	// })
 
 	for _, rule := range this.rules {
 		this.logger.Info("Listen Path: %s", rule)
@@ -171,13 +175,13 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error
 	}
 
 	dirName, fileName := filepath.Split(fileEvent.Name)
-	dirName, err = filepath.Abs(dirName)
+	dirNameAbs, err = filepath.Abs(dirName)
 	if err != nil {
 		return new(FileMeta), err
 	}
 
 	return &FileMeta{
-		Filepath:   filepath.Join(dirName, fileName),
+		Filepath:   filepath.Join(dirNameAbs, fileName),
 		Dirname:    dirName,
 		Filename:   fileName,
 		Ext:        filepath.Ext(fileName),
@@ -189,13 +193,18 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error
 
 func (this *Watchdog) adapterHandle(files []FileMeta) error {
 	var wg sync.WaitGroup
-	for _, Adapter := range this.adapters {
+	for _, fi := range files {
 		// Increment the WaitGroup counter.
 		wg.Add(1)
-		go func(apdater WatchdogAdapter) {
+		go func (fi FileMeta)  {
 			defer wg.Done()
-			apdater.SetLogger(this.logger).Handle(files)
-		}(Adapter)
+
+			// TODO:分布式事务
+			for _, Adapter := range this.adapters {
+				apdater.SetLogger(this.logger).Handle(fi)
+			}
+
+		}(fi)
 	}
 	// Wait for all goroutines to finish.
 	wg.Wait()

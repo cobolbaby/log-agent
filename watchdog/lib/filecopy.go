@@ -1,32 +1,9 @@
 package watchdog
 
 import (
-	"github.com/cobolbaby/log-agent/watchdog"
-	// "io"
-	// "os"
+	"os"
+	"path/filepath"
 )
-
-type FileAdapter struct {
-	Name   string
-	Config *FileAdapterCfg
-	logger watchdog.Logger
-}
-
-type FileAdapterCfg struct {
-	Dest string
-}
-
-func (this *FileAdapter) SetLogger(logger watchdog.Logger) watchdog.WatchdogAdapter {
-	this.logger = logger
-	return this
-}
-
-func (this *FileAdapter) Handle(fi watchdog.FileMeta) error {
-	// TODO:拷贝文件至目标目录
-	srcPath := path.join(fi.Dirname, fi.Filepath)
-	fmt.print(srcPath)
-	return copy(srcPath, dst)
-} 
 
 // Copy recursively copies the file, directory or symbolic link at src
 // to dst. The destination must not exist. Symbolic links are not

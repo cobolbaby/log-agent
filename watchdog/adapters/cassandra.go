@@ -30,31 +30,29 @@ func (this *CassandraAdapter) SetLogger(logger watchdog.Logger) watchdog.Watchdo
 	return this
 }
 
-func (this *CassandraAdapter) Handle(files []watchdog.FileMeta) error {
+func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
 	// time.Sleep(time.Second) // 停顿一秒
 
 	// getConn
 	session, _ := this.NewCluster().CreateSession()
 	defer session.Close()
 
-	// 修改引用值
-	for index, v := range files {
-		// TODO:针对超大文件执行过滤操作
-		if v.Size > 16*1024*1024 {
-			return errors.New("[CassandraAdapter]仅处理小于16M的文件")
-		}
-		// TODO:依据过滤条件过滤文件
-		// TODO:判断是否为压缩文件
-
-		dataBytes, err := ioutil.ReadFile(v.Filepath)
-		if err != nil {
-			return err
-		}
-		// 通过下标获取元素进行修改
-		// TODO:Gzip压缩，且需要保证内存使用率问题
-		files[index].ChunkData = dataBytes
-		files[index].Checksum = fmt.Sprintf("%x", md5.Sum(dataBytes))
+	// 针对超大文件执行过滤操作
+	if fi.Size > 16*1024*1024 {
+		return errors.New("[CassandraAdapter]仅处理小于16M的文件")
 	}
+	// TODO:依据过滤条件过滤文件
+	// TODO:判断是否为压缩文件
+
+	dataBytes, err := ioutil.ReadFile(fi.Filepath)
+	if err != nil {
+		return err
+	}
+	// 通过下标获取元素进行修改
+	// TODO:Gzip压缩，且需要保证内存使用率问题
+	fi.ChunkData = dataBytes
+	fi.Checksum = fmt.Sprintf("%x", md5.Sum(dataBytes))
+
 
 	// TODO:uploadFile
 	// // unlogged batch, 进行批量插入，最好是partition key 一致的情况

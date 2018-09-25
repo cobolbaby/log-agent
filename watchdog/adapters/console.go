@@ -19,12 +19,10 @@ func (this *ConsoleAdapter) SetLogger(logger watchdog.Logger) watchdog.WatchdogA
 	return this
 }
 
-func (this *ConsoleAdapter) Handle(files []watchdog.FileMeta) error {
+func (this *ConsoleAdapter) Handle(fi watchdog.FileMeta) error {
 	// getFileMeta
 	// write the filename to stdout
 	this.logger.Info("[ConsoleAdapter] -------------  %s  -------------", time.Now().Format("2006/1/2 15:04:05"))
-	for _, v := range files {
-		this.logger.Info("%s FILE: %s", v.LastOp.Op, v.Filepath)
-	}
+	this.logger.Info("%s FILE: %s", fi.LastOp.Op, fi.Filepath)
 	return nil
 }
