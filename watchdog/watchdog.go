@@ -77,10 +77,6 @@ func (this *Watchdog) Run() {
 	this.listen(func(changeEvent fsnotify.Event) {
 		debounceHandle(changeEvent)
 	})
-
-	done := make(chan bool)
-	// 如果done中还没放数据，那main挂起，直到放数据为止
-	<-done
 }
 
 func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
@@ -102,6 +98,9 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 		}
 	}
 
+	done := make(chan bool)
+	// 如果done中还没放数据，那main挂起，直到放数据为止
+	<-done
 	return nil
 }
 
