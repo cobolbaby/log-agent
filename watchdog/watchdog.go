@@ -71,11 +71,16 @@ func (this *Watchdog) AddHandler(adapter WatchdogAdapter) *Watchdog {
 func (this *Watchdog) Run() {
 	// 使用闭包函数优化Debounce函数的生成
 	debounceHandle := this.debounce(3*time.Second, func(events []fsnotify.Event) {
+		// 此处可以采用通道的方式做到并行
 		this.handle(events)
 	})
 	this.listen(func(changeEvent fsnotify.Event) {
 		debounceHandle(changeEvent)
 	})
+
+	done := make(chan bool)
+	// 如果done中还没放数据，那main挂起，直到放数据为止
+	<-done
 }
 
 func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
@@ -86,8 +91,8 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 	}
 	defer watcher.Close()
 
-	done := make(chan bool)
-	go watcher.RegCallback(callback)
+	go watcher.HandleFsEvent(callback)
+
 	for _, rule := range this.rules {
 		this.logger.Info("Listen Path: %s", rule)
 		err := watcher.RecursiveAdd(rule)
@@ -96,8 +101,6 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 			return err
 		}
 	}
-	// 如果done中还没放数据，那main挂起，直到放数据为止
-	<-done
 
 	return nil
 }

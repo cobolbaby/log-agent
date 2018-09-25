@@ -18,7 +18,7 @@ func NewRecursiveWatcher() (*RecursiveWatcher, error) {
 	return &RecursiveWatcher{watcher}, nil
 }
 
-func (w *RecursiveWatcher) RegCallback(callback func(event fsnotify.Event)) error {
+func (w *RecursiveWatcher) HandleFsEvent(callback func(event fsnotify.Event)) error {
 	for {
 		select {
 		case event := <-w.Events:
