@@ -33,6 +33,7 @@ func Start() {
 
 	// 启动监控程序
 	watchDog.Run()
+
 }
 
 func startSPIService(watchDog *watchdog.Watchdog) {

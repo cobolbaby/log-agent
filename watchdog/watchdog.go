@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-var fsEventQ []fsnotify.Event
-
 type Logger interface {
 	Error(format string, v ...interface{})
 	Warn(format string, v ...interface{})
@@ -44,10 +42,11 @@ type Watchdog struct {
 	logger   Logger
 	rules    []string
 	adapters []WatchdogAdapter
+	fsEventQ []fsnotify.Event
 }
 
 func Create() *Watchdog {
-	this := new(Watchdog)
+	this := &Watchdog{}
 	return this
 }
 
@@ -69,17 +68,12 @@ func (this *Watchdog) AddHandler(adapter WatchdogAdapter) *Watchdog {
 }
 
 func (this *Watchdog) Run() {
-	// 使用闭包函数优化Debounce函数的生成
-	debounceHandle := this.debounce(3*time.Second, func(events []fsnotify.Event) {
-		// 此处可以采用通道的方式做到并行
-		this.handle(events)
-	})
-	this.listen(func(changeEvent fsnotify.Event) {
-		debounceHandle(changeEvent)
-	})
+	taskQueueChan := make(chan fsnotify.Event)
+	go this.DebounceHandle(taskQueueChan, 3*time.Second)
+	this.Listen(taskQueueChan)
 }
 
-func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
+func (this *Watchdog) Listen(handleChan chan fsnotify.Event) error {
 	watcher, err := NewRecursiveWatcher()
 	if err != nil {
 		this.logger.Error("[NewRecursiveWatcher]%s", err)
@@ -87,7 +81,7 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 	}
 	defer watcher.Close()
 
-	go watcher.HandleFsEvent(callback)
+	go watcher.NotifyFsEvent(handleChan)
 
 	for _, rule := range this.rules {
 		this.logger.Info("Listen Path: %s", rule)
@@ -104,28 +98,42 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 	return nil
 }
 
-func (this *Watchdog) debounce(interval time.Duration, cb func(q []fsnotify.Event)) func(e fsnotify.Event) {
+func (this *Watchdog) DebounceHandle(handleChan chan fsnotify.Event, interval time.Duration) {
 	timer := time.NewTimer(interval)
-	eventChan := make(chan fsnotify.Event)
 	var e fsnotify.Event
-	go func() {
-		for {
-			select {
-			case e = <-eventChan:
-				fsEventQ = append(fsEventQ, e)
-				timer.Reset(interval)
-			case <-timer.C:
-				if len(fsEventQ) == 0 {
-					break
-				}
-				cb(fsEventQ)
-				fsEventQ = []fsnotify.Event{}
+	for {
+		select {
+		case e = <-handleChan:
+			this.fsEventQ = append(this.fsEventQ, e)
+			timer.Reset(interval)
+		case <-timer.C:
+			if len(this.fsEventQ) == 0 {
+				break
 			}
+			this.handle(this.fsEventQ)
+			this.fsEventQ = []fsnotify.Event{}
 		}
-	}()
-	return func(changeEvent fsnotify.Event) {
-		eventChan <- changeEvent
 	}
+}
+
+func (this *Watchdog) Handle(handleChan chan fsnotify.Event) {
+	var e fsnotify.Event
+	for {
+		select {
+		case e = <-handleChan:
+			this.handle([]fsnotify.Event{e})
+		}
+	}
+}
+
+func (this *Watchdog) handle(fileEvents []fsnotify.Event) error {
+	fileEvents = this.filterEvents(fileEvents)
+	// 获取changeFiles的metadata
+	changeFileMeta, err := this.getFileMeta(fileEvents)
+	if err != nil {
+		return err
+	}
+	return this.adapterHandle(changeFileMeta)
 }
 
 func (this *Watchdog) filterEvents(fileEvents []fsnotify.Event) []fsnotify.Event {
@@ -139,16 +147,6 @@ func (this *Watchdog) filterEvents(fileEvents []fsnotify.Event) []fsnotify.Event
 		}
 	}
 	return list
-}
-
-func (this *Watchdog) handle(fileEvents []fsnotify.Event) error {
-	fileEvents = this.filterEvents(fileEvents)
-	// 获取changeFiles的metadata
-	changeFileMeta, err := this.getFileMeta(fileEvents)
-	if err != nil {
-		return err
-	}
-	return this.adapterHandle(changeFileMeta)
 }
 
 func (this *Watchdog) getFileMeta(eventQ []fsnotify.Event) ([]FileMeta, error) {
