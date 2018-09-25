@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-var fsEventQ []fsnotify.Event
-
 type Logger interface {
 	Error(format string, v ...interface{})
 	Warn(format string, v ...interface{})
@@ -41,13 +39,19 @@ type WatchdogAdapter interface {
 }
 
 type Watchdog struct {
-	logger   Logger
-	rules    []string
-	adapters []WatchdogAdapter
+	logger     Logger
+	rules      []string
+	adapters   []WatchdogAdapter
+	delayQueue chan fsnotify.Event
+	debounce   time.Duration
+	fsEventQ   []fsnotify.Event
 }
 
 func Create() *Watchdog {
-	this := new(Watchdog)
+	this := &Watchdog{
+		delayQueue: make(chan fsnotify.Event),
+		debounce:   3000 * time.Microsecond,
+	}
 	return this
 }
 
@@ -76,9 +80,21 @@ func (this *Watchdog) Run() {
 	this.listen(func(changeEvent fsnotify.Event) {
 		debounceHandle(changeEvent)
 	})
+
+	// TODO:升级改造
+	done := make(chan bool)
+	go this.handleDelayQueue()
+	go this.listen()
+	// m := &Monitor{
+	// 	startTime: time.Now(),
+	// 	data:      SystemInfo{},
+	// }
+	// m.start(&lp)
+	// 如果done中还没放数据，那main挂起，直到放数据为止
+	<-done
 }
 
-func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
+func (this *Watchdog) listen() error {
 	watcher, err := NewRecursiveWatcher()
 	if err != nil {
 		this.logger.Error("[NewRecursiveWatcher]%s", err)
@@ -86,8 +102,10 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 	}
 	defer watcher.Close()
 
-	done := make(chan bool)
-	go watcher.RegCallback(callback)
+	go watcher.HandleFsEvent(func(changeEvent fsnotify.Event) {
+		this.delayQueue <- changeEvent
+	})
+
 	for _, rule := range this.rules {
 		this.logger.Info("Listen Path: %s", rule)
 		err := watcher.RecursiveAdd(rule)
@@ -96,33 +114,27 @@ func (this *Watchdog) listen(callback func(event fsnotify.Event)) error {
 			return err
 		}
 	}
-	// 如果done中还没放数据，那main挂起，直到放数据为止
-	<-done
 
 	return nil
 }
 
-func (this *Watchdog) debounce(interval time.Duration, cb func(q []fsnotify.Event)) func(e fsnotify.Event) {
-	timer := time.NewTimer(interval)
-	eventChan := make(chan fsnotify.Event)
+func (this *Watchdog) handleDelayQueue() {
+	timer := time.NewTimer(this.debounce)
 	var e fsnotify.Event
-	go func() {
-		for {
-			select {
-			case e = <-eventChan:
-				fsEventQ = append(fsEventQ, e)
-				timer.Reset(interval)
-			case <-timer.C:
-				if len(fsEventQ) == 0 {
-					break
-				}
-				cb(fsEventQ)
-				fsEventQ = []fsnotify.Event{}
+	for {
+		select {
+		case e = <-this.delayQueue:
+			this.fsEventQ = append(this.fsEventQ, e)
+			// this.handle()
+			timer.Reset(interval)
+		case <-timer.C:
+			if len(this.fsEventQ) == 0 {
+				break
 			}
+			this.handle(this.fsEventQ)
+			// 重置处理队列
+			this.fsEventQ = []fsnotify.Event{}
 		}
-	}()
-	return func(changeEvent fsnotify.Event) {
-		eventChan <- changeEvent
 	}
 }
 
