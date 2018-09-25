@@ -1,6 +1,7 @@
 package watchdog
 
 import (
+	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"os"
 	"path/filepath"
@@ -18,18 +19,19 @@ func NewRecursiveWatcher() (*RecursiveWatcher, error) {
 	return &RecursiveWatcher{watcher}, nil
 }
 
-func (w *RecursiveWatcher) HandleFsEvent(callback func(event fsnotify.Event)) error {
+func (w *RecursiveWatcher) NotifyFsEvent(handleChan chan fsnotify.Event) error {
 	for {
 		select {
 		case event := <-w.Events:
 			// 优化事件触发的时机
 			if event.Op&fsnotify.Create == fsnotify.Create {
 				w.RecursiveAdd(event.Name)
-				callback(event)
+				handleChan <- event
 				continue
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				callback(event)
+				fmt.Println("notifyevent")
+				handleChan <- event
 				continue
 			}
 			if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
@@ -37,7 +39,7 @@ func (w *RecursiveWatcher) HandleFsEvent(callback func(event fsnotify.Event)) er
 				continue
 			}
 			// if event.Op&fsnotify.Write == fsnotify.Write {
-			// 	callback(event)
+			// 	handleChan <- event
 			// }
 		case err := <-w.Errors:
 			return err
