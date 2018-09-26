@@ -36,3 +36,7 @@ func (this *FileAdapter) Handle(fi watchdog.FileMeta) error {
 	this.logger.Info("%s => %s", srcPath, destPath)
 	return nil
 }
+
+func (this *FileAdapter) Rollback(fi watchdog.FileMeta) error {
+	return nil
+}

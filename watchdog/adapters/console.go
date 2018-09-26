@@ -25,3 +25,7 @@ func (this *ConsoleAdapter) Handle(fi watchdog.FileMeta) error {
 	this.logger.Info("%s FILE: %s", fi.LastOp.Op, fi.Filepath)
 	return nil
 }
+
+func (this *ConsoleAdapter) Rollback(fi watchdog.FileMeta) error {
+	return nil
+}

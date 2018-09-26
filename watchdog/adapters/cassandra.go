@@ -53,7 +53,6 @@ func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
 	fi.ChunkData = dataBytes
 	fi.Checksum = fmt.Sprintf("%x", md5.Sum(dataBytes))
 
-
 	// TODO:uploadFile
 	// // unlogged batch, 进行批量插入，最好是partition key 一致的情况
 	// t := time.Now()
@@ -80,6 +79,10 @@ func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
 	// filepath
 	// archived
 
+	return nil
+}
+
+func (this *CassandraAdapter) Rollback(fi watchdog.FileMeta) error {
 	return nil
 }
 

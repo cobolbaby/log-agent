@@ -38,6 +38,7 @@ type FileMeta struct {
 type WatchdogAdapter interface {
 	Handle(changeFile FileMeta) error
 	SetLogger(logger Logger) WatchdogAdapter
+	Rollback(changeFile FileMeta) error
 }
 
 type Watchdog struct {
@@ -137,7 +138,9 @@ func (this *Watchdog) handle(fileEvents []fsnotify.Event) error {
 	if err != nil {
 		return err
 	}
-	return this.adapterHandle(changeFileMeta)
+	// 保证数据的一致性
+	this.adapterHandle(changeFileMeta, this.adapterRollback)
+	return nil
 }
 
 func (this *Watchdog) filterEvents(fileEvents []fsnotify.Event) []fsnotify.Event {
@@ -193,22 +196,39 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error
 	}, nil
 }
 
-func (this *Watchdog) adapterHandle(files []FileMeta) error {
+func (this *Watchdog) adapterHandle(files []FileMeta, cb func(file FileMeta)) {
 	var wg sync.WaitGroup
 	for _, fi := range files {
-		// Increment the WaitGroup counter.
 		wg.Add(1)
-		go func(fi FileMeta) {
+		go func(file FileMeta) {
 			defer wg.Done()
 
-			// TODO:分布式事务
+			failure := false
 			for _, Adapter := range this.adapters {
-				Adapter.SetLogger(this.logger).Handle(fi)
+				err := Adapter.SetLogger(this.logger).Handle(file)
+				if err != nil {
+					failure = true
+					break
+				}
 			}
-
+			if failure {
+				this.logger.Error("Need To Rollback File: %s", file.Filepath)
+				cb(file)
+			}
 		}(fi)
 	}
-	// Wait for all goroutines to finish.
 	wg.Wait()
-	return nil
+}
+
+func (this *Watchdog) adapterRollback(file FileMeta) {
+	var syncWg sync.WaitGroup
+	for _, Adapter := range this.adapters {
+		syncWg.Add(1)
+		go func(adapter WatchdogAdapter) {
+			defer syncWg.Done()
+
+			go adapter.SetLogger(this.logger).Rollback(file)
+		}(Adapter)
+	}
+	syncWg.Wait()
 }
