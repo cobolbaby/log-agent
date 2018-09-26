@@ -66,12 +66,14 @@ func (this *Watchdog) SetRules(rule string) *Watchdog {
 }
 
 func (this *Watchdog) AddHandler(adapter WatchdogAdapter) *Watchdog {
+	// TODO:实现优先级队列
 	this.adapters = append(this.adapters, adapter)
 	return this
 }
 
 func (this *Watchdog) Run() {
 	taskQueueChan := make(chan fsnotify.Event)
+	// 延迟处理通道
 	go this.DebounceHandle(taskQueueChan, 3*time.Second)
 	this.Listen(func(e fsnotify.Event) {
 		taskQueueChan <- e
@@ -207,6 +209,7 @@ func (this *Watchdog) adapterHandle(files []FileMeta, cb func(file FileMeta)) {
 			for _, Adapter := range this.adapters {
 				err := Adapter.SetLogger(this.logger).Handle(file)
 				if err != nil {
+					// TODO:失败重试
 					failure = true
 					break
 				}
@@ -231,4 +234,6 @@ func (this *Watchdog) adapterRollback(file FileMeta) {
 		}(Adapter)
 	}
 	syncWg.Wait()
+
+	// TODO:将处理失败的事件传送至失败通道
 }

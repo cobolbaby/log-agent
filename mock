@@ -1,6 +1,8 @@
 #!/bin/bash
 cd test
 
+rm -rf *
+
 touch a1
 echo "1" >> a1
 touch a2
