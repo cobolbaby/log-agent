@@ -51,6 +51,14 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:6d4d9067e639d96a804ee9a30fa89c7233c5c5edbfe736072ff00d48c97bccc4"
+  name = "github.com/otiai10/copy"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "7e9a647135a142c2669943d4a4d29be015ce9392"
+
+[[projects]]
+  branch = "master"
   digest = "1:6eb2645d74b43d9c87b51947df39f7c668a4f422cd512053f7f6f75bfaad0197"
   name = "golang.org/x/sys"
   packages = ["unix"]
@@ -73,6 +81,7 @@
     "github.com/astaxie/beego/logs",
     "github.com/fsnotify/fsnotify",
     "github.com/gocql/gocql",
+    "github.com/otiai10/copy",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -18,18 +18,18 @@ func NewRecursiveWatcher() (*RecursiveWatcher, error) {
 	return &RecursiveWatcher{watcher}, nil
 }
 
-func (w *RecursiveWatcher) NotifyFsEvent(handleChan chan fsnotify.Event) error {
+func (w *RecursiveWatcher) NotifyFsEvent(cb func(e fsnotify.Event)) error {
 	for {
 		select {
 		case event := <-w.Events:
 			// 优化事件触发的时机
 			if event.Op&fsnotify.Create == fsnotify.Create {
 				w.RecursiveAdd(event.Name)
-				handleChan <- event
+				cb(event)
 				continue
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				handleChan <- event
+				cb(event)
 				continue
 			}
 			if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
@@ -37,7 +37,7 @@ func (w *RecursiveWatcher) NotifyFsEvent(handleChan chan fsnotify.Event) error {
 				continue
 			}
 			// if event.Op&fsnotify.Write == fsnotify.Write {
-			// 	handleChan <- event
+			// 	cb(event)
 			// }
 		case err := <-w.Errors:
 			return err

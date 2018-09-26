@@ -1,0 +1,9 @@
+#!/bin/bash
+cd test
+
+touch a1
+echo "1" >> a1
+touch a2
+echo "2" >> a2
+touch a3
+echo "3" >> a3

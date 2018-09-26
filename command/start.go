@@ -38,19 +38,19 @@ func Start() {
 
 func startSPIService(watchDog *watchdog.Watchdog) {
 
-	watchDog.SetRules(ConfigMgr().String("agent::watchRules"))
+	watchDog.SetRules(ConfigMgr().String("spi::watchDirs"))
 	// 同步至共享目录
 	watchDog.AddHandler(&FileAdapter{
 		Name: "File",
 		Config: &FileAdapterCfg{
-			Dest: ConfigMgr().String("agent::watchRules"),
+			Dest: ConfigMgr().String("spi::shareDirs"),
 		},
 	})
 	// 备份
 	watchDog.AddHandler(&FileAdapter{
 		Name: "File",
 		Config: &FileAdapterCfg{
-			Dest: ConfigMgr().String("agent::watchRules"),
+			Dest: ConfigMgr().String("spi::backupDirs"),
 		},
 	})
 	watchDog.AddHandler(&CassandraAdapter{

@@ -2,13 +2,14 @@ package watchdog
 
 import (
 	"errors"
+	. "github.com/cobolbaby/log-agent/watchdog/lib"
 	"github.com/fsnotify/fsnotify"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
-	"github.com/cobolbaby/log-agent/watchdog/lib"
 )
 
 type Logger interface {
@@ -18,7 +19,7 @@ type Logger interface {
 }
 
 type FileMeta struct {
-	Filepath     string
+	Filepath     string // 绝对路径
 	Dirname      string
 	Filename     string
 	Size         int64
@@ -71,10 +72,12 @@ func (this *Watchdog) AddHandler(adapter WatchdogAdapter) *Watchdog {
 func (this *Watchdog) Run() {
 	taskQueueChan := make(chan fsnotify.Event)
 	go this.DebounceHandle(taskQueueChan, 3*time.Second)
-	this.Listen(taskQueueChan)
+	this.Listen(func(e fsnotify.Event) {
+		taskQueueChan <- e
+	})
 }
 
-func (this *Watchdog) Listen(handleChan chan fsnotify.Event) error {
+func (this *Watchdog) Listen(cb func(e fsnotify.Event)) error {
 	watcher, err := NewRecursiveWatcher()
 	if err != nil {
 		this.logger.Error("[NewRecursiveWatcher]%s", err)
@@ -82,10 +85,7 @@ func (this *Watchdog) Listen(handleChan chan fsnotify.Event) error {
 	}
 	defer watcher.Close()
 
-	go watcher.NotifyFsEvent(handleChan)
-	// go watcher.NotifyFsEvent(func (e fsnotify.Event)  {
-	// 	handleChan <- e
-	// })
+	go watcher.NotifyFsEvent(cb)
 
 	for _, rule := range this.rules {
 		this.logger.Info("Listen Path: %s", rule)
@@ -143,7 +143,8 @@ func (this *Watchdog) handle(fileEvents []fsnotify.Event) error {
 func (this *Watchdog) filterEvents(fileEvents []fsnotify.Event) []fsnotify.Event {
 	var list []fsnotify.Event
 	keys := make(map[string]bool)
-	// TODO:倒序循环，确保list中维持一个最新的事件列表
+	// 倒序，确保list中维护一个最新的事件列表
+	sort.SliceStable(fileEvents, func(i, j int) bool { return j < i })
 	for _, entry := range fileEvents {
 		if _, value := keys[entry.Name]; !value {
 			keys[entry.Name] = true
@@ -174,8 +175,9 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error
 		return new(FileMeta), errors.New("[getOneFileMeta]仅处理文件，忽略目录")
 	}
 
+	// Ref: https://golang.org/pkg/path/filepath/#Split
 	dirName, fileName := filepath.Split(fileEvent.Name)
-	dirNameAbs, err = filepath.Abs(dirName)
+	dirNameAbs, err := filepath.Abs(dirName)
 	if err != nil {
 		return new(FileMeta), err
 	}
@@ -196,12 +198,12 @@ func (this *Watchdog) adapterHandle(files []FileMeta) error {
 	for _, fi := range files {
 		// Increment the WaitGroup counter.
 		wg.Add(1)
-		go func (fi FileMeta)  {
+		go func(fi FileMeta) {
 			defer wg.Done()
 
 			// TODO:分布式事务
 			for _, Adapter := range this.adapters {
-				apdater.SetLogger(this.logger).Handle(fi)
+				Adapter.SetLogger(this.logger).Handle(fi)
 			}
 
 		}(fi)
