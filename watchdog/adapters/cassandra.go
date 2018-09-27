@@ -68,18 +68,54 @@ func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
 		| reference     | text      |              | 文件内容外部存储路径。                                                                                                                                                                                         |
 	*/
 
-	// item := map
-	// return this.Insert(item)
+	return this.Insert(fi)
 	// return this.BatchInsert()
 	return nil
 }
 
-func (this *CassandraAdapter) Insert() error {
+func (this *CassandraAdapter) Insert(item watchdog.FileMeta) error {
 	// if err := session.Query(`
 	//   INSERT INTO users (id, firstname, lastname, email, city, age) VALUES (?, ?, ?, ?, ?, ?)`,
 	//   gocqlUuid, user.FirstName, user.LastName, user.Email, user.City, user.Age).Exec(); err != nil {
 	//   errs = append(errs, err.Error())
 	// }
+
+	if err := session.Query(`
+		INSERT INTO slice_map_table
+		(
+			file_time,
+			folder,
+			pack,
+			name,
+			size,
+			modify_time,
+			upload_time,
+			content,
+			compress,
+			compress_size,
+			checksum,
+			host,
+			reference
+		)
+		VALUES
+		(
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		)`,
+		item.CreateTime,
+		item.Dirname,
+		item.Pack,
+		item.Filename,
+		item.Size,
+		item.ModifyTime,
+		item.UploadTime,
+		item.Content,
+		item.Compress,
+		item.CompressSize,
+		item.Checksum,
+		item.Host,
+		item.Reference).Exec(); err != nil {
+		this.logger.Error("%s %s", item.LastOp.Op, item.Filepath)
+	}
 	return nil
 }
 
