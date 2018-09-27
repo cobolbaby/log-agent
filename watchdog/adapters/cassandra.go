@@ -20,7 +20,7 @@ type CassandraAdapter struct {
 }
 
 type CassandraAdapterCfg struct {
-	Hosts     string
+	Hosts     []string
 	Keyspace  string
 	TableName string
 }
@@ -31,9 +31,6 @@ func (this *CassandraAdapter) SetLogger(logger watchdog.Logger) watchdog.Watchdo
 }
 
 func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
-	// time.Sleep(time.Second) // 停顿一秒
-
-	// getConn
 	session, _ := this.NewCluster().CreateSession()
 	defer session.Close()
 
@@ -53,7 +50,40 @@ func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
 	fi.ChunkData = dataBytes
 	fi.Checksum = fmt.Sprintf("%x", md5.Sum(dataBytes))
 
-	// TODO:uploadFile
+	/*
+		| Name          | Type      |          Key | Desc                                                                                                                                                                                                           |
+		| :------------ | :-------- | -----------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+		| file_time     | timestamp | PARTITON KEY | 使用**文件创建时间**作为文件时间，在机台时间同步的基础上，可以作为有意义的业务时间（测试时间）。针对特殊的机台，会使用**路径名中包含的时间**，或者**上传 Cassandra 的时间**作为代替；这个逻辑实现在 Agent 里。 |
+		| folder        | text      |  PRIMARY KEY | 文件所在路径名，从 Agent 监视路径下看的**相对路径**名。                                                                                                                                                        |
+		| pack          | text      |  PRIMARY KEY | **压缩包文件名**，目前只支持 zip；非压缩文件时为“”                                                                                                                                                             |
+		| name          | text      |  PRIMARY KEY | **文件名**；压缩包时，为**压缩包内完整路径+文件名**                                                                                                                                                            |
+		| size          | int       |              | 文件原始大小（byte）                                                                                                                                                                                           |
+		| modify_time   | timestamp |              | 文件修改时间                                                                                                                                                                                                   |
+		| upload_time   | timestamp |              | 上传 Cassandra 的时间                                                                                                                                                                                          |
+		| content       | blob      |              | 文件内容，目前支持上限是 16MB                                                                                                                                                                                  |
+		| compress      | boolean   |              | 存储的文件内容**是否 gzip 压缩**，对于原始压缩类（jpg/jpeg/gif/png/wmv/flv/zip/gz）之外的文件，都建议压缩存储。                                                                                                |
+		| compress_size | int       |              | 文件压缩后大小（byte），非压缩可以置 null                                                                                                                                                                      |
+		| checksum      | text      |              | 原始文件内容校验值，目前是 MD5。                                                                                                                                                                               |
+		| host          | text      |              | 原始上传机台的机器名。                                                                                                                                                                                         |
+		| reference     | text      |              | 文件内容外部存储路径。                                                                                                                                                                                         |
+	*/
+
+	// item := map
+	// return this.Insert(item)
+	// return this.BatchInsert()
+	return nil
+}
+
+func (this *CassandraAdapter) Insert() error {
+	// if err := session.Query(`
+	//   INSERT INTO users (id, firstname, lastname, email, city, age) VALUES (?, ?, ?, ?, ?, ?)`,
+	//   gocqlUuid, user.FirstName, user.LastName, user.Email, user.City, user.Age).Exec(); err != nil {
+	//   errs = append(errs, err.Error())
+	// }
+	return nil
+}
+
+func (this *CassandraAdapter) BatchInsert() error {
 	// // unlogged batch, 进行批量插入，最好是partition key 一致的情况
 	// t := time.Now()
 	// batch := session.NewBatch(gocql.UnloggedBatch)
@@ -64,21 +94,6 @@ func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
 	//     fmt.Println("execute batch:", err)
 	// }
 	// bt := time.Now().Sub(t).Nanoseconds()
-
-	// "folder",
-	// "filename",
-	// "size",
-	// "time_modify",
-	// "time_upload"
-	// "content",
-	// "compress",
-	// "compress_size",
-	// "checksum",
-	// "date_test",
-	// filetype
-	// filepath
-	// archived
-
 	return nil
 }
 
@@ -90,9 +105,9 @@ func (this *CassandraAdapter) NewCluster() *gocql.ClusterConfig {
 	if cluster != nil {
 		return cluster
 	}
-	cluster := gocql.NewCluster(this.Config.Hosts)
+	cluster = gocql.NewCluster(this.Config.Hosts...)
 	cluster.Keyspace = this.Config.Keyspace
-	cluster.Consistency = gocql.Three
+	cluster.Consistency = gocql.Quorum
 	// cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: 10}
 	// 设置连接池的数量，默认是2个(针对每一个host，都建立起NumConns个连接)
 	// ？连接池的建立在createSession之前，还是之后

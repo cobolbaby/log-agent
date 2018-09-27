@@ -34,3 +34,20 @@ Solving failure: No versions of github.com/fsnotify/fsnotify met constraints:
 exit status 2
 Process exiting with code: 1
 ```
+
+- `cqlsh`
+
+```
+$ cqlsh 10.190.51.89 
+Connection error: ('Unable to connect to any servers', {'10.190.51.89': ProtocolError("cql_version '3.3.1' is not supported by remote (w/ native protocol). Supported versions: [u'3.4.4']",)})
+$ cqlsh --version   
+cqlsh 5.0.1
+$ cqlsh --cqlversion 3.4.4 10.190.51.89
+Connected to bigdatatest_cluster at 10.190.51.89:9042.
+[cqlsh 5.0.1 | Cassandra 3.11.2 | CQL spec 3.4.4 | Native protocol v4]
+Use HELP for help.
+
+$ cqlsh 10.99.170.60     
+Connection error: ('Unable to connect to any servers', {'10.99.170.60': error(None, "Tried connecting to [('10.99.170.60', 9042)]. Last error: timed out")})
+$ cqlsh --cqlversion 3.4.4 --connect-timeout=10 10.99.170.60
+```

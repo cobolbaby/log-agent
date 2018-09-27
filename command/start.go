@@ -53,10 +53,11 @@ func startSPIService(watchDog *watchdog.Watchdog) {
 			Dest: ConfigMgr().String("spi::backupDirs"),
 		},
 	})
+	// TODO:字符串转切片
 	watchDog.AddHandler(&CassandraAdapter{
 		Name: "Cassandra",
 		Config: &CassandraAdapterCfg{
-			Hosts:     "10.190.51.89",
+			Hosts:     []string{"10.190.51.89", "10.190.51.90", "10.190.51.91"},
 			Keyspace:  "dc_agent",
 			TableName: "spi",
 		},
