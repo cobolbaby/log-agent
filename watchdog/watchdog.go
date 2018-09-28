@@ -84,6 +84,8 @@ func (this *Watchdog) Run() {
 	taskQueueChan := make(chan fsnotify.Event)
 	// 延迟处理通道
 	go this.DebounceHandle(taskQueueChan, 3*time.Second)
+	// TODO:策略模式
+	// TODO:支持监控目录的初次加载
 	this.Listen(func(e fsnotify.Event) {
 		taskQueueChan <- e
 	})
@@ -206,7 +208,9 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error
 	// }
 	fileTime := times.Get(fileInfo)
 
+	// fileCreateTime, _ := time.Parse("2006-01-02 15:04:05-0700", "2018-09-28 08:15:22+0000")
 	// TODO:矫正文件的创建时间
+	fileCreateTime := fileTime.ChangeTime().Truncate(time.Millisecond).UTC()
 
 	return &FileMeta{
 		Filepath:   fileEvent.Name,
@@ -214,7 +218,7 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error
 		Filename:   fileInfo.Name(),
 		Ext:        filepath.Ext(fileInfo.Name()),
 		Size:       fileInfo.Size(),
-		CreateTime: fileTime.ChangeTime().Truncate(time.Millisecond).UTC(),
+		CreateTime: fileCreateTime,
 		ModifyTime: fileInfo.ModTime().Truncate(time.Millisecond).UTC(),
 		LastOp:     fileEvent,
 		Host:       this.host,

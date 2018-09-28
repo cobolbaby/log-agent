@@ -5,5 +5,5 @@ import (
 )
 
 func Status() {
-	fmt.Println("CheckService")
+	fmt.Println("CheckServiceStatus")
 }

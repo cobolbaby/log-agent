@@ -42,6 +42,8 @@ func main() {
 		command.Install()
 	case "uninstall":
 		command.Uninstall()
+	case "test":
+		command.Test()
 	default:
 		fmt.Println(Usage)
 	}

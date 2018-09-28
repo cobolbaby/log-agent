@@ -51,3 +51,23 @@ $ cqlsh 10.99.170.60
 Connection error: ('Unable to connect to any servers', {'10.99.170.60': error(None, "Tried connecting to [('10.99.170.60', 9042)]. Last error: timed out")})
 $ cqlsh --cqlversion 3.4.4 --connect-timeout=10 10.99.170.60
 ```
+
+- `Linux`环境下无法获取文件创建时间
+
+```
+$ stat a1
+  文件：'a1'
+  大小：34        	块：1          IO 块：4096   普通文件
+设备：805h/2053d	Inode：106672      硬链接：1
+权限：(0777/-rwxrwxrwx)  Uid：( 1000/cobolbaby)   Gid：( 1000/cobolbaby)
+最近访问：2018-09-28 16:37:38.853810000 +0800
+最近更改：2018-09-28 16:37:38.836991900 +0800
+最近改动：2018-09-28 16:37:38.836991900 +0800
+创建时间：-
+```
+
+- `Could not connect to Cassandra Cluster`
+
+```
+ gocql: unable to create session: unable to discover protocol version: dial tcp 10.190.51.91:9042: i/o timeout
+```

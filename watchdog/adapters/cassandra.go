@@ -78,6 +78,7 @@ func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
 }
 
 func (this *CassandraAdapter) Insert(session *gocql.Session, item watchdog.FileMeta) error {
+	// 如果新增的记录主键已经存在，则更新历史记录
 	if err := session.Query(`
 		INSERT INTO `+this.Config.TableName+`
 		(
@@ -153,7 +154,7 @@ func (this *CassandraAdapter) CreateSession() *gocql.Session {
 
 	session, err := cluster.CreateSession()
 	if err != nil {
-		this.logger.Error("Could not connect to cassandra cluster: %v", err)
+		this.logger.Error("Could not connect to Cassandra Cluster: %s", err)
 		return nil
 	}
 
