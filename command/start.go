@@ -23,6 +23,7 @@ func Start() {
 	}
 
 	watchDog := watchdog.Create()
+	watchDog.SetHost(ConfigMgr().String("agent::host"))
 	watchDog.SetLogger(LogMgr())
 	watchDog.AddHandler(&ConsoleAdapter{Name: "Console"})
 
@@ -37,7 +38,6 @@ func Start() {
 }
 
 func startSPIService(watchDog *watchdog.Watchdog) {
-
 	watchDog.SetRules(ConfigMgr().String("spi::watchDirs"))
 	// 同步至共享目录
 	watchDog.AddHandler(&FileAdapter{

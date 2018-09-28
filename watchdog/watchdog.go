@@ -45,6 +45,7 @@ type WatchdogAdapter interface {
 }
 
 type Watchdog struct {
+	host     string
 	logger   Logger
 	rules    []string
 	adapters []WatchdogAdapter
@@ -53,6 +54,11 @@ type Watchdog struct {
 
 func Create() *Watchdog {
 	this := &Watchdog{}
+	return this
+}
+
+func (this *Watchdog) SetHost(host string) *Watchdog {
+	this.host = host
 	return this
 }
 
@@ -187,19 +193,20 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error
 	// Ref: https://golang.org/pkg/path/filepath/#Split
 	dirName, _ := filepath.Split(fileEvent.Name)
 	// 获取文件相关时间，支持跨平台
-	fileTime, err := times.Stat(fileEvent.Name)
-	if err != nil {
-		return new(FileMeta), err
-	}
-	var fileCreateTime time.Time
-	if fileTime.HasChangeTime() { // 非Win
-		fileCreateTime = fileTime.ChangeTime()
-	}
-	if fileTime.HasBirthTime() { // Win
-		fileCreateTime = fileTime.BirthTime()
-	}
+	// fileTime, err := times.Stat(fileEvent.Name)
+	// if err != nil {
+	// 	return new(FileMeta), err
+	// }
+	// var fileCreateTime time.Time
+	// if fileTime.HasChangeTime() { // 非Win
+	// 	fileCreateTime = fileTime.ChangeTime()
+	// }
+	// if fileTime.HasBirthTime() { // Win
+	// 	fileCreateTime = fileTime.BirthTime()
+	// }
+	fileTime := times.Get(fileInfo)
 
-	// TODO:时区问题
+	// TODO:矫正文件的创建时间
 
 	return &FileMeta{
 		Filepath:   fileEvent.Name,
@@ -207,10 +214,10 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error
 		Filename:   fileInfo.Name(),
 		Ext:        filepath.Ext(fileInfo.Name()),
 		Size:       fileInfo.Size(),
-		CreateTime: fileCreateTime,
-		// ModifyTime: fileTime.ModTime(),
-		ModifyTime: fileInfo.ModTime(),
+		CreateTime: fileTime.ChangeTime().Truncate(time.Millisecond).UTC(),
+		ModifyTime: fileInfo.ModTime().Truncate(time.Millisecond).UTC(),
 		LastOp:     fileEvent,
+		Host:       this.host,
 	}, nil
 }
 
