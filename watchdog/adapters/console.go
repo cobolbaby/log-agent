@@ -22,7 +22,7 @@ func (this *ConsoleAdapter) SetLogger(logger watchdog.Logger) watchdog.WatchdogA
 func (this *ConsoleAdapter) Handle(fi watchdog.FileMeta) error {
 	// write the filename to stdout
 	this.logger.Info("[ConsoleAdapter] -------------  %s  -------------", time.Now().Format("2006/1/2 15:04:05"))
-	this.logger.Info("%s FILE: %s", fi.LastOp.Op, fi.Filepath)
+	this.logger.Info("[ConsoleAdapter] %s %s", fi.LastOp.Op, fi.Filepath)
 	return nil
 }
 

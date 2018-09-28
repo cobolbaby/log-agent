@@ -58,8 +58,8 @@ func startSPIService(watchDog *watchdog.Watchdog) {
 		Name: "Cassandra",
 		Config: &CassandraAdapterCfg{
 			Hosts:     []string{"10.190.51.89", "10.190.51.90", "10.190.51.91"},
-			Keyspace:  "dc_agent",
-			TableName: "spi",
+			Keyspace:  "dc_agent2",
+			TableName: "spi_table",
 		},
 	})
 

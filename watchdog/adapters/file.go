@@ -24,16 +24,15 @@ func (this *FileAdapter) SetLogger(logger watchdog.Logger) watchdog.WatchdogAdap
 
 func (this *FileAdapter) Handle(fi watchdog.FileMeta) error {
 	// 拷贝文件至目标目录
-	// TODO:如何标识协程
 	this.logger.Info("[FileAdapter] -------------  %s  -------------", time.Now().Format("2006/1/2 15:04:05"))
-	srcPath := path.Join(fi.Dirname, fi.Filename)
+	// TODO:子目录路径获取异常
 	destPath := path.Join(this.Config.Dest, fi.Filename)
-	err := copy.Copy(srcPath, destPath)
+	err := copy.Copy(fi.Filepath, destPath)
 	if err != nil {
-		this.logger.Error("%s %s", fi.LastOp.Op, fi.Filepath)
+		this.logger.Error("[FileAdapter] %s => %s", fi.Filepath, err)
 		return err
 	}
-	this.logger.Info("%s => %s", srcPath, destPath)
+	this.logger.Info("[FileAdapter] %s => %s", fi.Filepath, destPath)
 	return nil
 }
 

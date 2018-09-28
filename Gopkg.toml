@@ -44,3 +44,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/otiai10/copy"
+
+[[constraint]]
+  name = "github.com/djherbis/times"
+  version = "1.0.1"

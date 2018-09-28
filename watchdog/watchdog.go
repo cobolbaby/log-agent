@@ -3,6 +3,7 @@ package watchdog
 import (
 	"errors"
 	. "github.com/cobolbaby/log-agent/watchdog/lib"
+	"github.com/djherbis/times"
 	"github.com/fsnotify/fsnotify"
 	"os"
 	"path/filepath"
@@ -19,20 +20,22 @@ type Logger interface {
 }
 
 type FileMeta struct {
-	Filepath     string // 绝对路径
+	Filepath     string
+	Pack         string
 	Dirname      string
 	Filename     string
-	Size         int64
+	Size         int64 // 字节
 	Ext          string
+	CreateTime   time.Time
 	ModifyTime   time.Time
-	UploadTime   time.Time
-	ChunkData    []byte
-	ChunkNo      uint32
-	ChunkSize    uint64
+	Content      []byte
+	LastOp       fsnotify.Event
+	BackUpTime   time.Time // 文件备份时间
+	Checksum     string
 	Compress     bool
 	CompressSize int64
-	Checksum     string
-	LastOp       fsnotify.Event
+	Reference    string // 保留字段
+	Host         string // 文件溯源
 }
 
 type WatchdogAdapter interface {
@@ -180,19 +183,32 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error
 		return new(FileMeta), errors.New("[getOneFileMeta]仅处理文件，忽略目录")
 	}
 
+	// 获取文件目录
 	// Ref: https://golang.org/pkg/path/filepath/#Split
-	dirName, fileName := filepath.Split(fileEvent.Name)
-	dirNameAbs, err := filepath.Abs(dirName)
+	dirName, _ := filepath.Split(fileEvent.Name)
+	// 获取文件相关时间，支持跨平台
+	fileTime, err := times.Stat(fileEvent.Name)
 	if err != nil {
 		return new(FileMeta), err
 	}
+	var fileCreateTime time.Time
+	if fileTime.HasChangeTime() { // 非Win
+		fileCreateTime = fileTime.ChangeTime()
+	}
+	if fileTime.HasBirthTime() { // Win
+		fileCreateTime = fileTime.BirthTime()
+	}
+
+	// TODO:时区问题
 
 	return &FileMeta{
-		Filepath:   filepath.Join(dirNameAbs, fileName),
+		Filepath:   fileEvent.Name,
 		Dirname:    dirName,
-		Filename:   fileName,
-		Ext:        filepath.Ext(fileName),
+		Filename:   fileInfo.Name(),
+		Ext:        filepath.Ext(fileInfo.Name()),
 		Size:       fileInfo.Size(),
+		CreateTime: fileCreateTime,
+		// ModifyTime: fileTime.ModTime(),
 		ModifyTime: fileInfo.ModTime(),
 		LastOp:     fileEvent,
 	}, nil

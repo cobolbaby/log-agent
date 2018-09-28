@@ -7,6 +7,7 @@ import (
 	"github.com/cobolbaby/log-agent/watchdog"
 	"github.com/gocql/gocql"
 	"io/ioutil"
+	"time"
 )
 
 var (
@@ -31,24 +32,31 @@ func (this *CassandraAdapter) SetLogger(logger watchdog.Logger) watchdog.Watchdo
 }
 
 func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
+	this.logger.Info("[CassandraAdapter] -------------  %s  -------------", time.Now().Format("2006/1/2 15:04:05"))
 	session, _ := this.NewCluster().CreateSession()
 	defer session.Close()
 
 	// 针对超大文件执行过滤操作
 	if fi.Size > 16*1024*1024 {
-		return errors.New("[CassandraAdapter]仅处理小于16M的文件")
+		this.logger.Error("[CassandraAdapter] %s => 文件大小超过16M", fi.Filepath)
+		return errors.New("[CassandraAdapter] 仅处理小于16M的文件")
 	}
 	// TODO:依据过滤条件过滤文件
 	// TODO:判断是否为压缩文件
+	// TODO:Gzip压缩，且需要保证内存使用率问题
 
 	dataBytes, err := ioutil.ReadFile(fi.Filepath)
 	if err != nil {
 		return err
 	}
-	// 通过下标获取元素进行修改
-	// TODO:Gzip压缩，且需要保证内存使用率问题
-	fi.ChunkData = dataBytes
+	fi.Pack = ""
+	fi.Compress = false
+	fi.CompressSize = 0
+	fi.Content = dataBytes
 	fi.Checksum = fmt.Sprintf("%x", md5.Sum(dataBytes))
+	fi.BackUpTime = time.Now()
+	fi.Host = ""
+	fi.Reference = ""
 
 	/*
 		| Name          | Type      |          Key | Desc                                                                                                                                                                                                           |
@@ -68,20 +76,12 @@ func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
 		| reference     | text      |              | 文件内容外部存储路径。                                                                                                                                                                                         |
 	*/
 
-	return this.Insert(fi)
-	// return this.BatchInsert()
-	return nil
+	return this.Insert(session, fi)
 }
 
-func (this *CassandraAdapter) Insert(item watchdog.FileMeta) error {
-	// if err := session.Query(`
-	//   INSERT INTO users (id, firstname, lastname, email, city, age) VALUES (?, ?, ?, ?, ?, ?)`,
-	//   gocqlUuid, user.FirstName, user.LastName, user.Email, user.City, user.Age).Exec(); err != nil {
-	//   errs = append(errs, err.Error())
-	// }
-
+func (this *CassandraAdapter) Insert(session *gocql.Session, item watchdog.FileMeta) error {
 	if err := session.Query(`
-		INSERT INTO slice_map_table
+		INSERT INTO `+this.Config.TableName+`
 		(
 			file_time,
 			folder,
@@ -107,14 +107,15 @@ func (this *CassandraAdapter) Insert(item watchdog.FileMeta) error {
 		item.Filename,
 		item.Size,
 		item.ModifyTime,
-		item.UploadTime,
+		item.BackUpTime,
 		item.Content,
 		item.Compress,
 		item.CompressSize,
 		item.Checksum,
 		item.Host,
 		item.Reference).Exec(); err != nil {
-		this.logger.Error("%s %s", item.LastOp.Op, item.Filepath)
+		this.logger.Error("[CassandraAdapter] %s => %s", item.Filepath, err)
+		return err
 	}
 	return nil
 }

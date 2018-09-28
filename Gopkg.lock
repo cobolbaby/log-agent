@@ -13,6 +13,14 @@
   version = "v1.10.1"
 
 [[projects]]
+  digest = "1:aca0109d4521779dc155378582ae8ecf1e6cb59b97e385eb17e1f363e2b799c0"
+  name = "github.com/djherbis/times"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "95292e44976d1217cf3611dc7c8d9466877d3ed5"
+  version = "v1.0.1"
+
+[[projects]]
   digest = "1:abeb38ade3f32a92943e5be54f55ed6d6e3b6602761d74b4aab4c9dd45c18abd"
   name = "github.com/fsnotify/fsnotify"
   packages = ["."]
@@ -79,6 +87,7 @@
   input-imports = [
     "github.com/astaxie/beego/config",
     "github.com/astaxie/beego/logs",
+    "github.com/djherbis/times",
     "github.com/fsnotify/fsnotify",
     "github.com/gocql/gocql",
     "github.com/otiai10/copy",
