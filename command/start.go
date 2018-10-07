@@ -4,7 +4,7 @@ import (
 	"github.com/cobolbaby/log-agent/plugins"
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
-	. "github.com/cobolbaby/log-agent/watchdog/adapters"
+	. "github.com/cobolbaby/log-agent/watchdog/handlers"
 )
 
 func Start() {
@@ -29,10 +29,8 @@ func Start() {
 	watchDog.SetLogger(LogMgr())
 	watchDog.AddHandler(&ConsoleAdapter{Name: "Console"})
 
-	// TODO:根据不同的业务获取不同的配置，同时调用不同的业务
-	plugins.StartSPI(watchDog)
 	// TODO:中间件实现，且明确如何做到反射
-	// watchDog.Use(plugins.SPIServiceWorker())
+	watchDog.Use(plugins.SPIServiceWorker())
 
 	// 启动监控程序
 	watchDog.Run()

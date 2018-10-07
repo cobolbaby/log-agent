@@ -2,7 +2,7 @@ package watchdog
 
 import (
 	"errors"
-	. "github.com/cobolbaby/log-agent/watchdog/lib"
+	. "github.com/cobolbaby/log-agent/watchdog/watchers"
 	"github.com/djherbis/times"
 	"github.com/fsnotify/fsnotify"
 	"os"
@@ -44,12 +44,18 @@ type WatchdogAdapter interface {
 	Rollback(changeFile FileMeta) error
 }
 
+type WatchdogListener interface {
+	Listen() error
+	SetLogger(logger Logger) WatchdogListener
+}
+
 type Watchdog struct {
 	host     string
 	logger   Logger
-	rules    []string
+	rules    []string[] // 二维数组
 	adapters []WatchdogAdapter
 	fsEventQ []fsnotify.Event
+	watcher  WatchdogListener
 }
 
 func Create() *Watchdog {
@@ -80,41 +86,81 @@ func (this *Watchdog) AddHandler(adapter WatchdogAdapter) *Watchdog {
 	return this
 }
 
-func (this *Watchdog) Run() {
-	taskQueueChan := make(chan fsnotify.Event)
-	// 延迟处理通道
-	go this.DebounceHandle(taskQueueChan, 3*time.Second)
-	// TODO:策略模式
-	// TODO:支持监控目录的初次加载
-	this.Listen(func(e fsnotify.Event) {
-		taskQueueChan <- e
-	})
+func (this *Watchdog) pushHandleStack(channel, handler WatchdogAdapter) *Watchdog {
+	// TODO:实现优先级队列
+	// this.adapters = append(this.adapters, adapter)
+	this.Handler[channel][] = {handler: handler, privilege: 6}
+	return this
 }
 
-func (this *Watchdog) Listen(cb func(e fsnotify.Event)) error {
-	watcher, err := NewRecursiveWatcher()
-	if err != nil {
-		this.logger.Error("[NewRecursiveWatcher]%s", err)
-		return err
-	}
-	defer watcher.Close()
+func (this *Watchdog) SetWatcher(watcher WatchdogAdapter)  *Watchdog{
+	this.watcher =  watcher
+	return this
+}
 
-	go watcher.NotifyFsEvent(cb)
+func (this *Watchdog) Run() {
+	taskQueueChan := make(chan xxxx)
+	// 延迟处理通道
+	// go this.DebounceHandle(taskQueueChan, 3*time.Second)
+	// // TODO:策略模式
+	// // TODO:支持监控目录的初次加载
+	// this.Listen(func(e fsnotify.Event) {
+	// 	taskQueueChan <- e
+	// })
 
-	for _, rule := range this.rules {
-		this.logger.Info("Listen Path: %s", rule)
-		err := watcher.RecursiveAdd(rule)
-		if err != nil {
-			this.logger.Error("[RecursiveAdd]%s", err)
-			return err
-		}
-	}
+	go this.ListenV2(taskQueueChan)
+	go this.DebounceV2(3*time.Second, taskQueueChan, DelayQueueChan)
+	go this.HandleV2(DelayQueueChan)
 
 	done := make(chan bool)
 	// 如果done中还没放数据，那main挂起，直到放数据为止
 	<-done
-	return nil
 }
+
+func HandleV2(DelayQueueChan)  {
+	for {
+		select {
+		case e = <-DelayQueueChan:
+			this.handle(e)
+		}
+	}
+}
+
+func (this *Watchdog) ListenV2(taskQueueChan chan fileChangeEvent) error {
+	// TODO:   循环rule
+	rules := {
+		val: this.rules.key.value
+		key: key
+	}
+	
+	
+	this.watcher.Listen(taskQueueChan,rules)
+}
+
+// func (this *Watchdog) Listen(cb func(e fsnotify.Event)) error {
+// 	watcher, err := NewRecursiveWatcher()
+// 	if err != nil {
+// 		this.logger.Error("[NewRecursiveWatcher]%s", err)
+// 		return err
+// 	}
+// 	defer watcher.Close()
+
+// 	go watcher.NotifyFsEvent(cb)
+
+// 	for _, rule := range this.rules {
+// 		this.logger.Info("Listen Path: %s", rule)
+// 		err := watcher.RecursiveAdd(rule)
+// 		if err != nil {
+// 			this.logger.Error("[RecursiveAdd]%s", err)
+// 			return err
+// 		}
+// 	}
+
+// 	done := make(chan bool)
+// 	// 如果done中还没放数据，那main挂起，直到放数据为止
+// 	<-done
+// 	return nil
+// }
 
 func (this *Watchdog) DebounceHandle(handleChan chan fsnotify.Event, interval time.Duration) {
 	timer := time.NewTimer(interval)
@@ -128,7 +174,8 @@ func (this *Watchdog) DebounceHandle(handleChan chan fsnotify.Event, interval ti
 			if len(this.fsEventQ) == 0 {
 				break
 			}
-			this.handle(this.fsEventQ)
+			// this.handle(this.fsEventQ)
+			sss <- this.fsEvent
 			this.fsEventQ = []fsnotify.Event{}
 		}
 	}
@@ -227,6 +274,7 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.Event) (*FileMeta, error
 
 func (this *Watchdog) adapterHandle(files []FileMeta, cb func(file FileMeta)) {
 	var wg sync.WaitGroup
+	// TODO: pool
 	for _, fi := range files {
 		wg.Add(1)
 		go func(file FileMeta) {

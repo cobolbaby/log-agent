@@ -3,7 +3,7 @@ package plugins
 import (
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
-	. "github.com/cobolbaby/log-agent/watchdog/adapters"
+	. "github.com/cobolbaby/log-agent/watchdog/handlers"
 )
 
 func StartSPI(watchDog *watchdog.Watchdog) {
@@ -31,4 +31,24 @@ func StartSPI(watchDog *watchdog.Watchdog) {
 			TableName: ConfigMgr().String("spi::cassandra-table"),
 		},
 	})
+}
+
+type xxx struct {
+
+}
+
+func (this xxx) listen ()  {
+	
+}
+
+func (this xxx) check ()  {
+	
+}
+
+func init ()  {
+	
+}
+
+func SPIServiceWorker() {
+	return &xxx{}
 }
