@@ -4,7 +4,6 @@ import (
 	"github.com/cobolbaby/log-agent/plugins"
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
-	. "github.com/cobolbaby/log-agent/watchdog/handlers"
 )
 
 func Start() {
@@ -22,17 +21,12 @@ func Start() {
 		return
 	}
 
-	// TODO:开启自检
-
-	watchDog := watchdog.Create()
+	watchDog := watchdog.NewWatchdog()
 	watchDog.SetHost(ConfigMgr().String("agent::host"))
 	watchDog.SetLogger(LogMgr())
-	watchDog.AddHandler(&ConsoleAdapter{Name: "Console"})
-
-	// TODO:中间件实现，且明确如何做到反射
-	watchDog.Use(plugins.SPIServiceWorker())
-
-	// 启动监控程序
+	watchDog.LoadActivePlugins(plugins.SPIServiceWorker())
+	// watchDog.LoadActivePlugins(plugins.SPIServiceWorker())
+	// watchDog.LoadActivePlugins(plugins.SPIServiceWorker())
+	// watchDog.LoadActivePlugins(plugins.SPIServiceWorker())
 	watchDog.Run()
-
 }

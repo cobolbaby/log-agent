@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+type Plugin interface {
+
+} 
+
 type Logger interface {
 	Error(format string, v ...interface{})
 	Warn(format string, v ...interface{})
@@ -38,6 +42,11 @@ type FileMeta struct {
 	Host         string // 文件溯源
 }
 
+type fileChangeEvent struct {
+	Name string
+	Op	 string
+}
+
 type WatchdogAdapter interface {
 	Handle(changeFile FileMeta) error
 	SetLogger(logger Logger) WatchdogAdapter
@@ -58,7 +67,7 @@ type Watchdog struct {
 	watcher  WatchdogListener
 }
 
-func Create() *Watchdog {
+func NewWatchdog() *Watchdog {
 	this := &Watchdog{}
 	return this
 }
@@ -98,8 +107,22 @@ func (this *Watchdog) SetWatcher(watcher WatchdogAdapter)  *Watchdog{
 	return this
 }
 
+func (this *Watchdog) SetPluginPath(pluginPath string) {
+	this.pluginPath = pluginPath
+	return this
+}
+
+// 加载具体的服务
+func (this *Watchdog) LoadActivePlugins(plugin) {
+	// this.plugins = append(this.plugins, "spi")
+	if plugin.isActive()
+		plugin.init(this)
+	return this
+}
+
 func (this *Watchdog) Run() {
-	taskQueueChan := make(chan xxxx)
+	taskQueueChan := make(chan fileChangeEvent)
+	DelayQueueChan := make(chan )
 	// 延迟处理通道
 	// go this.DebounceHandle(taskQueueChan, 3*time.Second)
 	// // TODO:策略模式

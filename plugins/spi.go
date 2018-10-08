@@ -6,49 +6,51 @@ import (
 	. "github.com/cobolbaby/log-agent/watchdog/handlers"
 )
 
-func StartSPI(watchDog *watchdog.Watchdog) {
-	watchDog.SetRules(ConfigMgr().String("spi::watchDirs"))
-	// 同步至共享目录
-	watchDog.AddHandler(&FileAdapter{
+type SPI struct {
+}
+
+func SPIServiceWorker() {
+	return &SPI{}
+}
+
+func (this *Spi) Description() string {
+	return "Test Agent for SPI"
+}
+
+
+func (this *SPI) isActive() bool {
+	return true
+}
+
+
+func (this *SPI) AutoCheck() {
+
+}
+
+func (this *SPI) Listen() {
+
+}
+
+func (this *SPI) Process() {
+
+}
+
+func (this *SPI) Init(watchDog *watchdog.Watchdog) {
+	$handler = [];
+	$handler[] = &ConsoleAdapter{Name: "Console"};
+	$handler[] = &FileAdapter{
 		Name: "File",
 		Config: &FileAdapterCfg{
 			Dest: ConfigMgr().String("spi::shareDirs"),
 		},
-	})
-	// 备份
-	watchDog.AddHandler(&FileAdapter{
-		Name: "File",
-		Config: &FileAdapterCfg{
-			Dest: ConfigMgr().String("spi::backupDirs"),
-		},
-	})
-	// TODO:字符串转切片
-	watchDog.AddHandler(&CassandraAdapter{
+	}
+	$handler[] = &CassandraAdapter{
 		Name: "Cassandra",
 		Config: &CassandraAdapterCfg{
 			Hosts:     []string{"10.190.51.89", "10.190.51.90", "10.190.51.91"},
 			Keyspace:  ConfigMgr().String("spi::cassandra-keyspace"),
 			TableName: ConfigMgr().String("spi::cassandra-table"),
 		},
-	})
+	}
 }
 
-type xxx struct {
-
-}
-
-func (this xxx) listen ()  {
-	
-}
-
-func (this xxx) check ()  {
-	
-}
-
-func init ()  {
-	
-}
-
-func SPIServiceWorker() {
-	return &xxx{}
-}
