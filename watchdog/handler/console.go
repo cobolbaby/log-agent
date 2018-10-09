@@ -9,7 +9,7 @@ type ConsoleAdapter struct {
 	Name     string
 	Config   *ConsoleAdapterCfg
 	logger   log.Logger
-	Priority int
+	Priority uint8
 }
 
 type ConsoleAdapterCfg struct {
@@ -17,6 +17,10 @@ type ConsoleAdapterCfg struct {
 
 func (this *ConsoleAdapter) SetLogger(logger log.Logger) {
 	this.logger = logger
+}
+
+func (this *ConsoleAdapter) GetPriority() uint8 {
+	return this.Priority
 }
 
 func (this *ConsoleAdapter) Handle(fi FileMeta) error {

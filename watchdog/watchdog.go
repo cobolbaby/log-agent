@@ -58,23 +58,14 @@ func (this *Watchdog) SetWatcher(biz string, listener watcher.Watcher) *Watchdog
 }
 
 func (this *Watchdog) SetRules(biz string, rule string) *Watchdog {
-	// if _, ok := this.rules[biz]; !ok {
-	// 	this.rules[biz] = make([]string, 0)
-	// }
 	// 将rules按照分隔符拆分，合并当前规则
 	ruleSlice := strings.Split(rule, ",")
 	this.rules[biz] = append(this.rules[biz], ruleSlice...)
 	return this
 }
 
-func (this *Watchdog) AddHandler(biz string, adapter handler.WatchdogHandler, args ...interface{}) *Watchdog {
-	// 变相实现函数参数设置默认值
-	var priority uint8
-	if len(args) == 1 {
-		priority, _ = args[0].(uint8)
-	} else {
-		priority = 0
-	}
+func (this *Watchdog) AddHandler(biz string, adapter handler.WatchdogHandler) *Watchdog {
+	priority, _ := adapter.GetPriority().(uint8)
 	// Map类型的变量需要初始化后才能操作
 	if _, ok := this.adapters[biz]; !ok {
 		this.adapters[biz] = make(map[uint8][]handler.WatchdogHandler)
@@ -166,25 +157,24 @@ func (this *Watchdog) Handle(rule *watcher.Rule) {
 
 func (this *Watchdog) handle(fileEvents []fsnotify.FileEvent) error {
 	fileEvents = this.filterEvents(fileEvents)
-	// 获取changeFiles的metadata
 	changeFileMeta, err := this.getFileMeta(fileEvents)
 	if err != nil {
+		this.logger.Error("[getFileMeta]%s", err)
 		return err
 	}
-	// 保证数据的一致性
 	this.adapterHandle(changeFileMeta)
 	return nil
 }
 
 func (this *Watchdog) filterEvents(fileEvents []fsnotify.FileEvent) []fsnotify.FileEvent {
-	var list []fsnotify.FileEvent
+	list := make([]fsnotify.FileEvent)
 	keys := make(map[string]bool)
 	// 倒序，确保list中维护一个最新的事件列表
-	sort.SliceStable(fileEvents, func(i, j int) bool { return j < i })
-	for _, entry := range fileEvents {
-		if _, value := keys[entry.Name]; !value {
-			keys[entry.Name] = true
-			list = append(list, entry)
+	for i := len(fileEvents); i > 0; i-- {
+		filename := fileEvents[i].Name
+		if _, ok := keys[filename]; !ok {
+			keys[filename] = true
+			list = append(list, fileEvents[i])
 		}
 	}
 	return list
@@ -268,14 +258,14 @@ func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
 			}
 			if failure {
 				this.logger.Error("Need To Rollback File: %s", file.Filepath)
-				// this.adapterRollback(file)
+				this.adapterRollback(*file)
 			}
 		}(fi)
 	}
 	wg.Wait()
 }
 
-// func (this *Watchdog) adapterRollback(file *handler.FileMeta) {
+func (this *Watchdog) adapterRollback(file *handler.FileMeta) {
 // 	var syncWg sync.WaitGroup
 // 	for _, Adapter := range this.adapters[file.LastOp.Biz] {
 // 		syncWg.Add(1)
@@ -288,4 +278,4 @@ func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
 // 	syncWg.Wait()
 
 // 	// TODO:将处理失败的事件传送至失败通道
-// }
+}

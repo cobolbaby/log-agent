@@ -22,6 +22,10 @@ func (this *FileAdapter) SetLogger(logger log.Logger) {
 	this.logger = logger
 }
 
+func (this *FileAdapter) GetPriority() uint8 {
+	return this.Priority
+}
+
 func (this *FileAdapter) Handle(fi FileMeta) error {
 	// 拷贝文件至目标目录
 	this.logger.Info("[FileAdapter] -------------  %s  -------------", time.Now().Format("2006/1/2 15:04:05"))

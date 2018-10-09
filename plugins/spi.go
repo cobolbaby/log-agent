@@ -45,12 +45,14 @@ func (this *SPI) Init(watchDog *watchdog.Watchdog) {
 	watchDog.SetRules(this.TagName(), ConfigMgr().String("spi::watchDirs"))
 	watchDog.AddHandler(this.TagName(), &handler.ConsoleAdapter{
 		Name: "Console",
-	}, 0)
+		Priority: 0,
+	})
 	// watchDog.AddHandler(&handler.FileAdapter{
 	// 	Name: "File",
 	// 	Config: &handler.FileAdapterCfg{
 	// 		Dest: ConfigMgr().String("spi::shareDirs"),
 	// 	},
+	//  	Priority: 0,
 	// })
 	watchDog.AddHandler(this.TagName(), &handler.CassandraAdapter{
 		Name: "Cassandra",
@@ -59,6 +61,7 @@ func (this *SPI) Init(watchDog *watchdog.Watchdog) {
 			Keyspace:  ConfigMgr().String("spi::cassandra-keyspace"),
 			TableName: ConfigMgr().String("spi::cassandra-table"),
 		},
-	}, 0)
+		Priority: 0,
+	})
 
 }

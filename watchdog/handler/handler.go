@@ -29,4 +29,5 @@ type WatchdogHandler interface {
 	Handle(file FileMeta) error
 	Rollback(file FileMeta) error
 	SetLogger(logger log.Logger)
+	GetPriority() uint8
 }

@@ -6,26 +6,27 @@ import (
 	"reflect"
 )
 
-type Service interface {
-	AutoCheck() error
-	Listen() error
+type Plugin interface {
+	Run() error
 }
 
 type Hook struct {
-	tags map[string][]Service
+	tags map[string][]Plugin
 }
 
-// 动态添加插件到某个标签
-func (this *Hook) Import(tag string, name ...Service) {
-	if _, ok := this.tags[tag]; !ok {
-		this.tags[tag] = make([]Service, 0)
+func NewHook() *Hook {
+	return &Hook{
+		tags: make(map[string][]Plugin),
 	}
-	this.tags[tag] = append(this.tags[tag], name...)
 }
 
-func (this *Hook) Get(tag string) []Service {
+func (this *Hook) Import(tag string, plugins ...Plugin) {
+	this.tags[tag] = append(this.tags[tag], plugins...)
+}
+
+func (this *Hook) Get(tag string) []Plugin {
 	if _, ok := this.tags[tag]; !ok {
-		return make([]Service, 0)
+		return []Plugin{}
 	}
 	return this.tags[tag]
 }
@@ -34,31 +35,24 @@ func (this *Hook) Listen(tag string, params ...interface{}) error {
 	if _, ok := this.tags[tag]; !ok {
 		return nil
 	}
-	// if(APP_DEBUG) {
-	// 	G($tag.'Start');
-	// 	trace('[ '.$tag.' ] --START--','','DEBUG');
-	// }
-	for _, v := range this.tags[tag] {
-		err := this.exec(v, tag, params...)
+	for _, plugin := range this.tags[tag] {
+		err := this.exec(plugin, params...)
 		if err != nil {
-			// 如果返回则中断插件执行
+			// 如果异常则中断插件执行
 			return err
 		}
 	}
-	// if(APP_DEBUG) { // 记录行为的执行日志
-	// 	trace('[ '.$tag.' ] --END-- [ RunTime:'.G($tag.'Start',$tag.'End',6).'s ]','','DEBUG');
-	//
 	return nil
 }
 
-func (this *Hook) exec(object interface{}, methodName string, args ...interface{}) error {
+func (this *Hook) exec(plugin Plugin, args ...interface{}) error {
 	inputs := make([]reflect.Value, len(args))
 	for i, _ := range args {
 		inputs[i] = reflect.ValueOf(args[i])
 	}
-	f := reflect.ValueOf(object).MethodByName(methodName)
+	f := reflect.ValueOf(plugin).MethodByName("Run")
 	if !f.IsValid() {
-		msg := fmt.Sprintf("struct %s does not have method %s", reflect.TypeOf(object), methodName)
+		msg := fmt.Sprintf("struct %s does not have method Run", reflect.TypeOf(plugin))
 		return errors.New(msg)
 	}
 	f.Call(inputs)

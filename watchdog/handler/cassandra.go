@@ -18,7 +18,7 @@ type CassandraAdapter struct {
 	Name     string
 	Config   *CassandraAdapterCfg
 	logger   log.Logger
-	Priority int
+	Priority uint8
 }
 
 type CassandraAdapterCfg struct {
@@ -29,6 +29,10 @@ type CassandraAdapterCfg struct {
 
 func (this *CassandraAdapter) SetLogger(logger log.Logger) {
 	this.logger = logger
+}
+
+func (this *CassandraAdapter) GetPriority() uint8 {
+	return this.Priority
 }
 
 func (this *CassandraAdapter) Handle(fi FileMeta) error {
@@ -151,9 +155,12 @@ func (this *CassandraAdapter) CreateSession() (*gocql.Session, error) {
 
 	cluster.Keyspace = this.Config.Keyspace
 	cluster.Consistency = gocql.Quorum
-	// cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: 10}
-	// 设置连接池的数量，默认是2个(针对每一个host，都建立起NumConns个连接)
-	// cluster.NumConns = 3
+	cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: 2}
+
+	// [fix]gocql: unable to create session: unable to setup connection: 
+	// gocql: no response received from cassandra within timeout period
+	cluster.Timeout = 1 * time.Second
+	// cluster.ProtoVersion = 4
 
 	session, err := cluster.CreateSession()
 	if err != nil {
