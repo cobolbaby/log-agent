@@ -70,4 +70,6 @@ $ stat a1
 
 ```
  gocql: unable to create session: unable to discover protocol version: dial tcp 10.190.51.91:9042: i/o timeout
+
+ gocql: unable to create session: control: unable to setup connection: gocql: no response received from cassandra within timeout period
 ```

@@ -1,10 +1,16 @@
-package watchdog
+package fsnotify
 
 import (
 	"github.com/fsnotify/fsnotify"
 	"os"
 	"path/filepath"
 )
+
+type FileEvent struct {
+	Biz  string
+	Op   string
+	Name string
+}
 
 type RecursiveWatcher struct {
 	*fsnotify.Watcher
@@ -18,27 +24,42 @@ func NewRecursiveWatcher() (*RecursiveWatcher, error) {
 	return &RecursiveWatcher{watcher}, nil
 }
 
-func (w *RecursiveWatcher) NotifyFsEvent(cb func(e fsnotify.Event)) error {
+func (w *RecursiveWatcher) NotifyFsEvent(cb func(e FileEvent)) error {
 	for {
 		select {
 		case event := <-w.Events:
 			// 优化事件触发的时机
 			if event.Op&fsnotify.Create == fsnotify.Create {
 				w.RecursiveAdd(event.Name)
-				cb(event)
-				continue
+				cb(FileEvent{
+					Name: event.Name,
+					Op:   "Create",
+				})
+				break
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				cb(event)
-				continue
+				cb(FileEvent{
+					Name: event.Name,
+					Op:   "Write",
+				})
+				break
 			}
-			if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
+			if event.Op&fsnotify.Remove == fsnotify.Remove {
 				w.RecursiveRemove(event.Name)
-				continue
+				cb(FileEvent{
+					Name: event.Name,
+					Op:   "Remove",
+				})
+				break
 			}
-			// if event.Op&fsnotify.Write == fsnotify.Write {
-			// 	cb(event)
-			// }
+			if event.Op&fsnotify.Rename == fsnotify.Rename {
+				w.RecursiveRemove(event.Name)
+				cb(FileEvent{
+					Name: event.Name,
+					Op:   "Rename",
+				})
+				break
+			}
 		case err := <-w.Errors:
 			return err
 		}

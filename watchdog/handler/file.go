@@ -1,28 +1,28 @@
-package watchdog
+package handler
 
 import (
-	"github.com/cobolbaby/log-agent/watchdog"
+	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"github.com/otiai10/copy"
 	"path"
 	"time"
 )
 
 type FileAdapter struct {
-	Name   string
-	Config *FileAdapterCfg
-	logger watchdog.Logger
+	Name     string
+	Config   *FileAdapterCfg
+	logger   log.Logger
+	Priority int
 }
 
 type FileAdapterCfg struct {
 	Dest string
 }
 
-func (this *FileAdapter) SetLogger(logger watchdog.Logger) watchdog.WatchdogAdapter {
+func (this *FileAdapter) SetLogger(logger log.Logger) {
 	this.logger = logger
-	return this
 }
 
-func (this *FileAdapter) Handle(fi watchdog.FileMeta) error {
+func (this *FileAdapter) Handle(fi FileMeta) error {
 	// 拷贝文件至目标目录
 	this.logger.Info("[FileAdapter] -------------  %s  -------------", time.Now().Format("2006/1/2 15:04:05"))
 	// TODO:子目录路径获取异常
@@ -36,6 +36,6 @@ func (this *FileAdapter) Handle(fi watchdog.FileMeta) error {
 	return nil
 }
 
-func (this *FileAdapter) Rollback(fi watchdog.FileMeta) error {
+func (this *FileAdapter) Rollback(fi FileMeta) error {
 	return nil
 }

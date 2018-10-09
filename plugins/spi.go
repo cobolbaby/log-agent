@@ -3,54 +3,62 @@ package plugins
 import (
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
-	. "github.com/cobolbaby/log-agent/watchdog/handlers"
+	"github.com/cobolbaby/log-agent/watchdog/handler"
+	"github.com/cobolbaby/log-agent/watchdog/watcher"
 )
 
 type SPI struct {
 }
 
-func SPIServiceWorker() {
+func SPIServiceWorker() *SPI {
 	return &SPI{}
 }
 
-func (this *Spi) Description() string {
-	return "Test Agent for SPI"
+func (this *SPI) TagName() string {
+	return "SPI"
 }
 
+func (this *SPI) Description() string {
+	return "DC-Agent For SPI"
+}
 
-func (this *SPI) isActive() bool {
+func (this *SPI) IsActive() bool {
 	return true
 }
 
-
-func (this *SPI) AutoCheck() {
-
-}
-
-func (this *SPI) Listen() {
+func (this *SPI) AutoCheck() error {
+	return nil
 
 }
 
-func (this *SPI) Process() {
+func (this *SPI) Listen() error {
+	return nil
+}
 
+func (this *SPI) Process() error {
+	return nil
 }
 
 func (this *SPI) Init(watchDog *watchdog.Watchdog) {
-	$handler = [];
-	$handler[] = &ConsoleAdapter{Name: "Console"};
-	$handler[] = &FileAdapter{
-		Name: "File",
-		Config: &FileAdapterCfg{
-			Dest: ConfigMgr().String("spi::shareDirs"),
-		},
-	}
-	$handler[] = &CassandraAdapter{
+
+	watchDog.SetWatcher(this.TagName(), watcher.NewFsnotifyWatcher())
+	watchDog.SetRules(this.TagName(), ConfigMgr().String("spi::watchDirs"))
+	watchDog.AddHandler(this.TagName(), &handler.ConsoleAdapter{
+		Name: "Console",
+	}, 0)
+	// watchDog.AddHandler(&handler.FileAdapter{
+	// 	Name: "File",
+	// 	Config: &handler.FileAdapterCfg{
+	// 		Dest: ConfigMgr().String("spi::shareDirs"),
+	// 	},
+	// })
+	watchDog.AddHandler(this.TagName(), &handler.CassandraAdapter{
 		Name: "Cassandra",
-		Config: &CassandraAdapterCfg{
+		Config: &handler.CassandraAdapterCfg{
 			Hosts:     []string{"10.190.51.89", "10.190.51.90", "10.190.51.91"},
 			Keyspace:  ConfigMgr().String("spi::cassandra-keyspace"),
 			TableName: ConfigMgr().String("spi::cassandra-table"),
 		},
-	}
-}
+	}, 0)
 
+}

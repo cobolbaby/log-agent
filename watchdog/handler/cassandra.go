@@ -1,10 +1,10 @@
-package watchdog
+package handler
 
 import (
 	"crypto/md5"
 	"errors"
 	"fmt"
-	"github.com/cobolbaby/log-agent/watchdog"
+	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"github.com/gocql/gocql"
 	"io/ioutil"
 	"time"
@@ -15,9 +15,10 @@ var (
 )
 
 type CassandraAdapter struct {
-	Name   string
-	Config *CassandraAdapterCfg
-	logger watchdog.Logger
+	Name     string
+	Config   *CassandraAdapterCfg
+	logger   log.Logger
+	Priority int
 }
 
 type CassandraAdapterCfg struct {
@@ -26,14 +27,16 @@ type CassandraAdapterCfg struct {
 	TableName string
 }
 
-func (this *CassandraAdapter) SetLogger(logger watchdog.Logger) watchdog.WatchdogAdapter {
+func (this *CassandraAdapter) SetLogger(logger log.Logger) {
 	this.logger = logger
-	return this
 }
 
-func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
+func (this *CassandraAdapter) Handle(fi FileMeta) error {
 	this.logger.Info("[CassandraAdapter] -------------  %s  -------------", time.Now().Format("2006/1/2 15:04:05"))
-	session := this.CreateSession()
+	session, err := this.CreateSession()
+	if err != nil {
+		return err
+	}
 	defer session.Close()
 
 	// 针对超大文件执行过滤操作
@@ -77,7 +80,7 @@ func (this *CassandraAdapter) Handle(fi watchdog.FileMeta) error {
 	return this.Insert(session, fi)
 }
 
-func (this *CassandraAdapter) Insert(session *gocql.Session, item watchdog.FileMeta) error {
+func (this *CassandraAdapter) Insert(session *gocql.Session, item FileMeta) error {
 	// 如果新增的记录主键已经存在，则更新历史记录
 	if err := session.Query(`
 		INSERT INTO `+this.Config.TableName+`
@@ -131,11 +134,11 @@ func (this *CassandraAdapter) BatchInsert() error {
 	return nil
 }
 
-func (this *CassandraAdapter) Rollback(fi watchdog.FileMeta) error {
+func (this *CassandraAdapter) Rollback(fi FileMeta) error {
 	return nil
 }
 
-func (this *CassandraAdapter) CreateSession() *gocql.Session {
+func (this *CassandraAdapter) CreateSession() (*gocql.Session, error) {
 	cluster := gocql.NewCluster(this.Config.Hosts...)
 
 	// The authenticator is needed if password authentication is
@@ -155,12 +158,12 @@ func (this *CassandraAdapter) CreateSession() *gocql.Session {
 	session, err := cluster.CreateSession()
 	if err != nil {
 		this.logger.Error("Could not connect to Cassandra Cluster: %s", err)
-		return nil
+		return new(gocql.Session), err
 	}
 
 	// this.CheckCassandraTable(session)
 
-	return session
+	return session, nil
 }
 
 // Check if the table already exists. Create if table does not exist

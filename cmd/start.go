@@ -1,4 +1,4 @@
-package command
+package cmd
 
 import (
 	"github.com/cobolbaby/log-agent/plugins"
@@ -24,9 +24,9 @@ func Start() {
 	watchDog := watchdog.NewWatchdog()
 	watchDog.SetHost(ConfigMgr().String("agent::host"))
 	watchDog.SetLogger(LogMgr())
-	watchDog.LoadActivePlugins(plugins.SPIServiceWorker())
-	// watchDog.LoadActivePlugins(plugins.SPIServiceWorker())
-	// watchDog.LoadActivePlugins(plugins.SPIServiceWorker())
-	// watchDog.LoadActivePlugins(plugins.SPIServiceWorker())
+	watchDog.LoadPlugins(plugins.SPIServiceWorker())
+	// watchDog.LoadPlugins(plugins.SPIServiceWorker())
+	// watchDog.LoadPlugins(plugins.SPIServiceWorker())
+	// watchDog.LoadPlugins(plugins.SPIServiceWorker())
 	watchDog.Run()
 }

@@ -3,7 +3,7 @@ package main
 import (
 	// 需在此处添加代码。[1]
 	"fmt"
-	"github.com/cobolbaby/log-agent/command"
+	"github.com/cobolbaby/log-agent/cmd"
 	"os"
 )
 
@@ -33,17 +33,17 @@ func main() {
 	case "help", "-h":
 		fmt.Println(Usage)
 	case "start":
-		command.Start()
+		cmd.Start()
 	case "stop":
-		command.Stop()
+		cmd.Stop()
 	case "status":
-		command.Status()
+		cmd.Status()
 	case "install":
-		command.Install()
+		cmd.Install()
 	case "uninstall":
-		command.Uninstall()
+		cmd.Uninstall()
 	case "test":
-		command.Test()
+		cmd.Test()
 	default:
 		fmt.Println(Usage)
 	}

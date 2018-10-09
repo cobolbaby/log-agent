@@ -1,4 +1,4 @@
-package watchdog
+package hook
 
 import (
 	"errors"
@@ -16,7 +16,7 @@ type Hook struct {
 }
 
 // 动态添加插件到某个标签
-func (this *Hook) Add(tag string, name ...Service) {
+func (this *Hook) Import(tag string, name ...Service) {
 	if _, ok := this.tags[tag]; !ok {
 		this.tags[tag] = make([]Service, 0)
 	}
