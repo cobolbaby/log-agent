@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/cobolbaby/log-agent/watchdog/handler"
 	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
+	"github.com/cobolbaby/log-agent/watchdog/lib/hook"
 	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"github.com/cobolbaby/log-agent/watchdog/watcher"
 	"github.com/djherbis/times"
@@ -18,8 +19,8 @@ import (
 
 type Plugin interface {
 	Init(*Watchdog)
-	Description() string
 	IsActive() bool
+	Description() string
 	AutoCheck() error
 	Listen() error
 	Process() error
@@ -31,7 +32,8 @@ type Watchdog struct {
 	watchers map[string]watcher.Watcher
 	rules    map[string][]string
 	adapters map[string]map[uint8][]handler.WatchdogHandler // 优先级队列
-	fsEventQ []fsnotify.FileEvent
+	plugins  []Plugin
+	cacheQ 	 []fsnotify.FileEvent
 }
 
 func NewWatchdog() *Watchdog {
@@ -87,12 +89,18 @@ func (this *Watchdog) LoadPlugins(plugin Plugin) *Watchdog {
 		this.logger.Error("plugin %s does not have method Init, so skip...", reflect.TypeOf(plugin))
 		return this
 	}
-	// TODO:通过加载Json配置的方式进行初始化
+
+	this.plugins = append(this.plugins, plugin)
+	// TODO:Import hook
+	
 	plugin.Init(this)
 	return this
 }
 
 func (this *Watchdog) Run() {
+	// TODO:AutoCheck hook
+	// TODO:Init hook
+	
 	// 支持同时配置多种业务的监控策略
 	for biz, rules := range this.rules {
 		aRule := &watcher.Rule{
@@ -123,14 +131,14 @@ func (this *Watchdog) TransferDebounce(rule *watcher.Rule) {
 	for {
 		select {
 		case e = <-rule.DelayQueueChan:
-			this.fsEventQ = append(this.fsEventQ, e)
+			this.cacheQ = append(this.cacheQ, e)
 			timer.Reset(rule.Delay)
 		case <-timer.C:
-			if len(this.fsEventQ) == 0 {
+			if len(this.cacheQ) == 0 {
 				break
 			}
-			rule.TaskQueueChan <- this.fsEventQ
-			this.fsEventQ = []fsnotify.FileEvent{}
+			rule.TaskQueueChan <- this.cacheQ
+			this.cacheQ = []fsnotify.FileEvent{}
 		}
 	}
 }
@@ -180,14 +188,17 @@ func (this *Watchdog) filterEvents(fileEvents []fsnotify.FileEvent) []fsnotify.F
 	return list
 }
 
-func (this *Watchdog) getFileMeta(eventQ []fsnotify.FileEvent) ([]*handler.FileMeta, error) {
+func (this *Watchdog) getFileMeta(fileEvents []fsnotify.FileEvent) ([]*handler.FileMeta, error) {
 	var fileMetas []*handler.FileMeta
 	// TODO:如何并行获取
-	for _, event := range eventQ {
+	for _, event := range fileEvents {
 		fileMeta, err := this.getOneFileMeta(event)
 		if err != nil {
 			return nil, err
 		}
+		
+		// TODO:Filter hook
+
 		fileMetas = append(fileMetas, fileMeta)
 	}
 	return fileMetas, nil
@@ -245,17 +256,18 @@ func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
 			defer wg.Done()
 
 			failure := false
-			for _, Adapters := range this.adapters[file.LastOp.Biz] {
-				for _, Adapter := range Adapters {
-					Adapter.SetLogger(this.logger)
-					err := Adapter.Handle(*file)
-					if err != nil {
-						// TODO:失败重试
-						failure = true
-						break
-					}
-				}
-			}
+			
+			// for _, Adapters := range this.adapters[file.LastOp.Biz] {
+			// 	for _, Adapter := range Adapters {
+			// 		Adapter.SetLogger(this.logger)
+			// 		err := Adapter.Handle(*file)
+			// 		if err != nil {
+			// 			// TODO:失败重试
+			// 			failure = true
+			// 			break
+			// 		}
+			// 	}
+			// }
 			if failure {
 				this.logger.Error("Need To Rollback File: %s", file.Filepath)
 				this.adapterRollback(*file)
