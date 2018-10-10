@@ -19,7 +19,7 @@ func (this *RabbitmqAdapter) SetLogger(logger log.Logger) {
 	this.logger = logger
 }
 
-func (this *FileAdapter) GetPriority() uint8 {
+func (this *RabbitmqAdapter) GetPriority() uint8 {
 	return this.Priority
 }
 

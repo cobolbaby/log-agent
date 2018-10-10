@@ -44,8 +44,8 @@ func (this *SPI) Init(watchDog *watchdog.Watchdog) {
 	watchDog.SetWatcher(this.TagName(), watcher.NewFsnotifyWatcher())
 	watchDog.SetRules(this.TagName(), ConfigMgr().String("spi::watchDirs"))
 	watchDog.AddHandler(this.TagName(), &handler.ConsoleAdapter{
-		Name: "Console",
-		Priority: 0,
+		Name:     "Console",
+		Priority: 1,
 	})
 	// watchDog.AddHandler(&handler.FileAdapter{
 	// 	Name: "File",

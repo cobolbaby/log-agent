@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/cobolbaby/log-agent/watchdog/handler"
 	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
-	"github.com/cobolbaby/log-agent/watchdog/lib/hook"
+	// "github.com/cobolbaby/log-agent/watchdog/lib/hook"
 	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"github.com/cobolbaby/log-agent/watchdog/watcher"
 	"github.com/djherbis/times"
@@ -31,16 +31,16 @@ type Watchdog struct {
 	logger   log.Logger
 	watchers map[string]watcher.Watcher
 	rules    map[string][]string
-	adapters map[string]map[uint8][]handler.WatchdogHandler // 优先级队列
+	adapters map[string][]handler.WatchdogHandler // 优先级队列
 	plugins  []Plugin
-	cacheQ 	 []fsnotify.FileEvent
+	cacheQ   []fsnotify.FileEvent
 }
 
 func NewWatchdog() *Watchdog {
 	return &Watchdog{
 		rules:    make(map[string][]string),
 		watchers: make(map[string]watcher.Watcher),
-		adapters: make(map[string]map[uint8][]handler.WatchdogHandler),
+		adapters: make(map[string][]handler.WatchdogHandler),
 	}
 }
 
@@ -66,13 +66,14 @@ func (this *Watchdog) SetRules(biz string, rule string) *Watchdog {
 	return this
 }
 
-func (this *Watchdog) AddHandler(biz string, adapter handler.WatchdogHandler) *Watchdog {
-	priority, _ := adapter.GetPriority().(uint8)
-	// Map类型的变量需要初始化后才能操作
-	if _, ok := this.adapters[biz]; !ok {
-		this.adapters[biz] = make(map[uint8][]handler.WatchdogHandler)
-	}
-	this.adapters[biz][priority] = append(this.adapters[biz][priority], adapter)
+func (this *Watchdog) AddHandler(biz string, adapter ...handler.WatchdogHandler) *Watchdog {
+	this.adapters[biz] = append(this.adapters[biz], adapter...)
+
+	// 按照Priority排序
+	adapters := this.adapters[biz]
+	sort.SliceStable(adapters, func(i, j int) bool { return adapters[i].GetPriority() > adapters[j].GetPriority() })
+	this.adapters[biz] = adapters
+
 	return this
 }
 
@@ -92,7 +93,7 @@ func (this *Watchdog) LoadPlugins(plugin Plugin) *Watchdog {
 
 	this.plugins = append(this.plugins, plugin)
 	// TODO:Import hook
-	
+
 	plugin.Init(this)
 	return this
 }
@@ -100,7 +101,7 @@ func (this *Watchdog) LoadPlugins(plugin Plugin) *Watchdog {
 func (this *Watchdog) Run() {
 	// TODO:AutoCheck hook
 	// TODO:Init hook
-	
+
 	// 支持同时配置多种业务的监控策略
 	for biz, rules := range this.rules {
 		aRule := &watcher.Rule{
@@ -175,10 +176,10 @@ func (this *Watchdog) handle(fileEvents []fsnotify.FileEvent) error {
 }
 
 func (this *Watchdog) filterEvents(fileEvents []fsnotify.FileEvent) []fsnotify.FileEvent {
-	list := make([]fsnotify.FileEvent)
+	var list []fsnotify.FileEvent
 	keys := make(map[string]bool)
 	// 倒序，确保list中维护一个最新的事件列表
-	for i := len(fileEvents); i > 0; i-- {
+	for i := len(fileEvents) - 1; i >= 0; i-- {
 		filename := fileEvents[i].Name
 		if _, ok := keys[filename]; !ok {
 			keys[filename] = true
@@ -196,7 +197,7 @@ func (this *Watchdog) getFileMeta(fileEvents []fsnotify.FileEvent) ([]*handler.F
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// TODO:Filter hook
 
 		fileMetas = append(fileMetas, fileMeta)
@@ -249,28 +250,24 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.FileEvent) (*handler.Fil
 
 func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
 	var wg sync.WaitGroup
-	// TODO: pool
 	for _, fi := range files {
 		wg.Add(1)
 		go func(file *handler.FileMeta) {
 			defer wg.Done()
 
 			failure := false
-			
-			// for _, Adapters := range this.adapters[file.LastOp.Biz] {
-			// 	for _, Adapter := range Adapters {
-			// 		Adapter.SetLogger(this.logger)
-			// 		err := Adapter.Handle(*file)
-			// 		if err != nil {
-			// 			// TODO:失败重试
-			// 			failure = true
-			// 			break
-			// 		}
-			// 	}
-			// }
+			for _, Adapter := range this.adapters[file.LastOp.Biz] {
+				Adapter.SetLogger(this.logger)
+				if err := Adapter.Handle(*file); err != nil {
+					// TODO:失败重试
+					this.logger.Error("File Handle Error: %s", err)
+					failure = true
+					break
+				}
+			}
 			if failure {
 				this.logger.Error("Need To Rollback File: %s", file.Filepath)
-				this.adapterRollback(*file)
+				this.adapterRollback(file)
 			}
 		}(fi)
 	}
@@ -278,16 +275,16 @@ func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
 }
 
 func (this *Watchdog) adapterRollback(file *handler.FileMeta) {
-// 	var syncWg sync.WaitGroup
-// 	for _, Adapter := range this.adapters[file.LastOp.Biz] {
-// 		syncWg.Add(1)
-// 		go func(adapterhandler.WatchdogHandler) {
-// 			defer syncWg.Done()
+	// 	var syncWg sync.WaitGroup
+	// 	for _, Adapter := range this.adapters[file.LastOp.Biz] {
+	// 		syncWg.Add(1)
+	// 		go func(adapterhandler.WatchdogHandler) {
+	// 			defer syncWg.Done()
 
-// 			go adapter.SetLogger(this.logger).Rollback(*file)
-// 		}(Adapter)
-// 	}
-// 	syncWg.Wait()
+	// 			go adapter.SetLogger(this.logger).Rollback(*file)
+	// 		}(Adapter)
+	// 	}
+	// 	syncWg.Wait()
 
-// 	// TODO:将处理失败的事件传送至失败通道
+	// 	// TODO:将处理失败的事件传送至失败通道
 }

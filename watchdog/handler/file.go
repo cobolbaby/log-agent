@@ -11,7 +11,7 @@ type FileAdapter struct {
 	Name     string
 	Config   *FileAdapterCfg
 	logger   log.Logger
-	Priority int
+	Priority uint8
 }
 
 type FileAdapterCfg struct {

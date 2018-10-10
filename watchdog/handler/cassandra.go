@@ -157,7 +157,7 @@ func (this *CassandraAdapter) CreateSession() (*gocql.Session, error) {
 	cluster.Consistency = gocql.Quorum
 	cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: 2}
 
-	// [fix]gocql: unable to create session: unable to setup connection: 
+	// [fix]gocql: unable to create session: unable to setup connection:
 	// gocql: no response received from cassandra within timeout period
 	cluster.Timeout = 1 * time.Second
 	// cluster.ProtoVersion = 4
