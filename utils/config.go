@@ -6,6 +6,7 @@ import (
 )
 
 const (
+	// TODO:优化配置路径，不能采用相对路径或者绝对路径，需要外部传递
 	DEFAULT_CONF_PATH = "./conf/logagent.ini"
 )
 
