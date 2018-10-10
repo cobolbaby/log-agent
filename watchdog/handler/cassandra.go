@@ -48,7 +48,6 @@ func (this *CassandraAdapter) Handle(fi FileMeta) error {
 		this.logger.Error("[CassandraAdapter] %s => 文件大小超过16M", fi.Filepath)
 		return errors.New("[CassandraAdapter] 仅处理小于16M的文件")
 	}
-	// TODO:依据过滤条件过滤文件
 	// TODO:判断是否为压缩文件
 	// TODO:Gzip压缩，且需要保证内存使用率问题
 
@@ -142,6 +141,7 @@ func (this *CassandraAdapter) Rollback(fi FileMeta) error {
 	return nil
 }
 
+// TODO:如何保证协程共享数据库连接
 func (this *CassandraAdapter) CreateSession() (*gocql.Session, error) {
 	cluster := gocql.NewCluster(this.Config.Hosts...)
 

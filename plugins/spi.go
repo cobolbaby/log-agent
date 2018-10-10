@@ -15,7 +15,7 @@ func SPIServiceWorker() *SPI {
 	return &SPI{}
 }
 
-func (this *SPI) TagName() string {
+func (this *SPI) bizName() string {
 	return "SPI"
 }
 
@@ -27,37 +27,46 @@ func (this *SPI) IsActive() bool {
 	return true
 }
 
+// TODO:检查配置文件中的配置是否正确
 func (this *SPI) AutoCheck() error {
 	fmt.Println("SPI AutoCheck")
-	// TODO:检查配置文件中的配置是否正确
 	return nil
 
 }
 
-func (this *SPI) Listen() error {
+// TODO:确认文件是否需要处理，或者是否存在异常
+func (this *SPI) CheckFile(file *handler.FileMeta) error {
+	if file.LastOp.Biz != this.bizName() {
+		return nil
+	}
 	return nil
 }
 
-func (this *SPI) Process() error {
+// TODO:ETL小工具
+func (this *SPI) Transform(file *handler.FileMeta) error {
+	if file.LastOp.Biz != this.bizName() {
+		return nil
+	}
 	return nil
 }
 
+// [必须]初始化
 func (this *SPI) Init(watchDog *watchdog.Watchdog) {
 
-	watchDog.SetWatcher(this.TagName(), watcher.NewFsnotifyWatcher())
-	watchDog.SetRules(this.TagName(), ConfigMgr().String("spi::watchDirs"))
-	watchDog.AddHandler(this.TagName(), &handler.ConsoleAdapter{
+	watchDog.SetWatcher(this.bizName(), watcher.NewFsnotifyWatcher())
+	watchDog.SetRules(this.bizName(), ConfigMgr().String("spi::watchDirs"))
+	watchDog.AddHandler(this.bizName(), &handler.ConsoleAdapter{
 		Name:     "Console",
 		Priority: 1,
 	})
-	// watchDog.AddHandler(&handler.FileAdapter{
+	// watchDog.AddHandler((this.bizName(), &handler.FileAdapter{
 	// 	Name: "File",
 	// 	Config: &handler.FileAdapterCfg{
 	// 		Dest: ConfigMgr().String("spi::shareDirs"),
 	// 	},
-	//  	Priority: 0,
+	// 	Priority: 0,
 	// })
-	watchDog.AddHandler(this.TagName(), &handler.CassandraAdapter{
+	watchDog.AddHandler(this.bizName(), &handler.CassandraAdapter{
 		Name: "Cassandra",
 		Config: &handler.CassandraAdapterCfg{
 			Hosts:     []string{"10.190.51.89", "10.190.51.90", "10.190.51.91"},

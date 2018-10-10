@@ -167,7 +167,6 @@ func (this *Watchdog) filterEvents(fileEvents []fsnotify.FileEvent) []fsnotify.F
 
 func (this *Watchdog) getFileMeta(fileEvents []fsnotify.FileEvent) ([]*handler.FileMeta, error) {
 	var fileMetas []*handler.FileMeta
-	// TODO:如何并行获取
 	for _, event := range fileEvents {
 		fileMeta, err := this.getOneFileMeta(event)
 		if err != nil {
@@ -225,9 +224,17 @@ func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
 	for _, fi := range files {
 		go func(file *handler.FileMeta) {
 
+			// TODO:getOneFileMeta方法调用时机调整，防止Handle协程阻塞
+			// 支持Agent层级的清洗操作
+			// TODO:除了采用hook的机制，其实还可以采用更为简便的方式
+			this.hook.Trigger("CheckFile", file)
+			this.hook.Trigger("Transform", file)
+			// ...
+			// TODO:文件处理异常需要将该文件事件传送会DelayQueueChan
+
 			failure := false
+			// 考虑到失败回滚，采用串行更为便利
 			for _, Adapter := range this.adapters[file.LastOp.Biz] {
-				// this.hook.Trigger("Process", file)
 				Adapter.SetLogger(this.logger)
 				if err := Adapter.Handle(*file); err != nil {
 					// TODO:失败重试
