@@ -4,27 +4,17 @@ import (
 	"errors"
 	"github.com/cobolbaby/log-agent/watchdog/handler"
 	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
-	// "github.com/cobolbaby/log-agent/watchdog/lib/hook"
+	"github.com/cobolbaby/log-agent/watchdog/lib/hook"
 	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"github.com/cobolbaby/log-agent/watchdog/watcher"
 	"github.com/djherbis/times"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
-	"sync"
+	// "sync"
 	"time"
 )
-
-type Plugin interface {
-	Init(*Watchdog)
-	IsActive() bool
-	Description() string
-	AutoCheck() error
-	Listen() error
-	Process() error
-}
 
 type Watchdog struct {
 	host     string
@@ -32,8 +22,8 @@ type Watchdog struct {
 	watchers map[string]watcher.Watcher
 	rules    map[string][]string
 	adapters map[string][]handler.WatchdogHandler // 优先级队列
-	plugins  []Plugin
 	cacheQ   []fsnotify.FileEvent
+	hook     *hook.AdvanceHook
 }
 
 func NewWatchdog() *Watchdog {
@@ -41,6 +31,7 @@ func NewWatchdog() *Watchdog {
 		rules:    make(map[string][]string),
 		watchers: make(map[string]watcher.Watcher),
 		adapters: make(map[string][]handler.WatchdogHandler),
+		hook:     hook.NewAdvanceHook(),
 	}
 }
 
@@ -77,30 +68,16 @@ func (this *Watchdog) AddHandler(biz string, adapter ...handler.WatchdogHandler)
 	return this
 }
 
-func (this *Watchdog) LoadPlugins(plugin Plugin) *Watchdog {
-	if !reflect.ValueOf(plugin).MethodByName("IsActive").IsValid() {
-		this.logger.Error("plugin %s does not have method IsActive, so skip...", reflect.TypeOf(plugin))
-		return this
-	}
-	if !plugin.IsActive() {
-		this.logger.Info("plugin %s is not active, so skip...", reflect.TypeOf(plugin))
-		return this
-	}
-	if !reflect.ValueOf(plugin).MethodByName("Init").IsValid() {
-		this.logger.Error("plugin %s does not have method Init, so skip...", reflect.TypeOf(plugin))
-		return this
-	}
-
-	this.plugins = append(this.plugins, plugin)
-	// TODO:Import hook
-
-	plugin.Init(this)
+func (this *Watchdog) LoadPlugins(plugin hook.AdvancePlugin) *Watchdog {
+	this.hook.Import(plugin)
 	return this
 }
 
 func (this *Watchdog) Run() {
-	// TODO:AutoCheck hook
-	// TODO:Init hook
+	// AutoCheck hook
+	this.hook.Trigger("AutoCheck")
+	// Init hook
+	this.hook.Trigger("Init", this)
 
 	// 支持同时配置多种业务的监控策略
 	for biz, rules := range this.rules {
@@ -164,15 +141,14 @@ func (this *Watchdog) Handle(rule *watcher.Rule) {
 	}
 }
 
-func (this *Watchdog) handle(fileEvents []fsnotify.FileEvent) error {
+func (this *Watchdog) handle(fileEvents []fsnotify.FileEvent) {
 	fileEvents = this.filterEvents(fileEvents)
 	changeFileMeta, err := this.getFileMeta(fileEvents)
 	if err != nil {
 		this.logger.Error("[getFileMeta]%s", err)
-		return err
+		return
 	}
 	this.adapterHandle(changeFileMeta)
-	return nil
 }
 
 func (this *Watchdog) filterEvents(fileEvents []fsnotify.FileEvent) []fsnotify.FileEvent {
@@ -197,9 +173,6 @@ func (this *Watchdog) getFileMeta(fileEvents []fsnotify.FileEvent) ([]*handler.F
 		if err != nil {
 			return nil, err
 		}
-
-		// TODO:Filter hook
-
 		fileMetas = append(fileMetas, fileMeta)
 	}
 	return fileMetas, nil
@@ -249,14 +222,12 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.FileEvent) (*handler.Fil
 }
 
 func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
-	var wg sync.WaitGroup
 	for _, fi := range files {
-		wg.Add(1)
 		go func(file *handler.FileMeta) {
-			defer wg.Done()
 
 			failure := false
 			for _, Adapter := range this.adapters[file.LastOp.Biz] {
+				// this.hook.Trigger("Process", file)
 				Adapter.SetLogger(this.logger)
 				if err := Adapter.Handle(*file); err != nil {
 					// TODO:失败重试
@@ -271,7 +242,6 @@ func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
 			}
 		}(fi)
 	}
-	wg.Wait()
 }
 
 func (this *Watchdog) adapterRollback(file *handler.FileMeta) {

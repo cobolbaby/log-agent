@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"fmt"
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
 	"github.com/cobolbaby/log-agent/watchdog/handler"
@@ -27,6 +28,8 @@ func (this *SPI) IsActive() bool {
 }
 
 func (this *SPI) AutoCheck() error {
+	fmt.Println("SPI AutoCheck")
+	// TODO:检查配置文件中的配置是否正确
 	return nil
 
 }

@@ -6,6 +6,7 @@ import (
 	"reflect"
 )
 
+// 插件需支持Run方法
 type Plugin interface {
 	Run() error
 }
@@ -31,7 +32,7 @@ func (this *Hook) Get(tag string) []Plugin {
 	return this.tags[tag]
 }
 
-func (this *Hook) Listen(tag string, params ...interface{}) error {
+func (this *Hook) Trigger(tag string, params ...interface{}) error {
 	if _, ok := this.tags[tag]; !ok {
 		return nil
 	}
