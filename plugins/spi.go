@@ -54,7 +54,6 @@ func (this *SPI) Transform(file *handler.FileMeta) error {
 func (this *SPI) Init(watchDog *watchdog.Watchdog) {
 
 	watchDog.
-		SetWatcher(this.bizName(), watcher.NewFsnotifyWatcher()).
 		SetRules(this.bizName(), ConfigMgr().String("spi::watchDirs")).
 		// AddHandler((this.bizName(), &handler.FileAdapter{
 		// 	Name: "File",

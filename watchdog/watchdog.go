@@ -46,9 +46,7 @@ func (this *Watchdog) SetLogger(logger log.Logger) *Watchdog {
 }
 
 func (this *Watchdog) SetWatcher(biz string, listener watcher.Watcher) *Watchdog {
-	this.watchers[biz] = listener
-
-	// TODO:建立映射 CHANGED EXISTED
+	// this.watchers[biz] = listener
 
 	return this
 }
@@ -105,7 +103,6 @@ func (this *Watchdog) Run() {
 
 func (this *Watchdog) Listen(rule *watcher.Rule) {
 	// this.watchers[rule.Biz].Listen(rule)
-	// TODO: 获取this.watchers[rule.Biz]，判断是否进行了如下配置
 
 	// 监听文件变化，则调用fsnotify
 	if true {
