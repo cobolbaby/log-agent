@@ -260,9 +260,9 @@ func (this *Watchdog) adapterHandle(files []fsnotify.FileEvent) {
 			}
 
 			// 记录文件最新的md5值
-			this.logger.Info("original file modtime : %s", bm.Get(file.Name))
+			this.logger.Info("original file %s modtime : %s", file.Name, bm.Get(file.Name))
 			bm.Put(file.Name, fileMeta.ModifyTime.String(), 0)
-			this.logger.Info("changed file modtime : %s", bm.Get(file.Name))
+			this.logger.Info("changed file %s modtime : %s", file.Name, bm.Get(file.Name))
 		}(file)
 	}
 }
