@@ -47,6 +47,9 @@ func (this *Watchdog) SetLogger(logger log.Logger) *Watchdog {
 
 func (this *Watchdog) SetWatcher(biz string, listener watcher.Watcher) *Watchdog {
 	this.watchers[biz] = listener
+
+	// TODO:建立映射 CHANGED EXISTED
+
 	return this
 }
 
@@ -88,6 +91,7 @@ func (this *Watchdog) Run() {
 			Delay:          3 * time.Second,
 			TaskQueueChan:  make(chan []fsnotify.FileEvent),
 		}
+		// go this.RegErrChan(aRule)
 		go this.Listen(aRule)
 		go this.TransferDebounce(aRule)
 		// go this.Transfer(aRule)
@@ -100,7 +104,21 @@ func (this *Watchdog) Run() {
 }
 
 func (this *Watchdog) Listen(rule *watcher.Rule) {
-	this.watchers[rule.Biz].Listen(rule)
+	// this.watchers[rule.Biz].Listen(rule)
+	// TODO: 获取this.watchers[rule.Biz]，判断是否进行了如下配置
+
+	// 监听文件变化，则调用fsnotify
+	if false {
+		watcher.NewFsnotifyWatcher().Listen(rule)
+	}
+	// 导入目录下原有文件，则调用fspolling
+	if true {
+		watcher.NewFspollingWatcher().Listen(rule)
+	}
+
+	done := make(chan bool)
+	// 如果done中还没放数据，那main挂起，直到放数据为止
+	<-done
 }
 
 func (this *Watchdog) TransferDebounce(rule *watcher.Rule) {
@@ -221,10 +239,17 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.FileEvent) (*handler.Fil
 }
 
 func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
+	// TODO:使用ant控制并发的协程数
+	// TODO:佐证一味地增加协程数并不一定能加快任务执行
 	for _, fi := range files {
 		go func(file *handler.FileMeta) {
 
+			// TODO:指定需要监控的目录，记录该路径下文件的md5
+
+			// TODO:循环遍历该目录，检测文件的变更情况
+
 			// TODO:getOneFileMeta方法调用时机调整，防止Handle协程阻塞
+
 			// 支持Agent层级的清洗操作
 			// TODO:除了采用hook的机制，其实还可以采用更为简便的方式
 			this.hook.Trigger("CheckFile", file)
@@ -247,6 +272,9 @@ func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
 				this.logger.Error("Need To Rollback File: %s", file.Filepath)
 				this.adapterRollback(file)
 			}
+
+			// TODO:推送成功之后修改记录文件的md5
+
 		}(fi)
 	}
 }

@@ -29,8 +29,5 @@ func (this *FsnotifyWatcher) Listen(rule *Rule) error {
 		}
 	}
 
-	done := make(chan bool)
-	// 如果done中还没放数据，那main挂起，直到放数据为止
-	<-done
 	return nil
 }
