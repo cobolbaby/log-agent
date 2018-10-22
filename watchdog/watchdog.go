@@ -109,11 +109,11 @@ func (this *Watchdog) Listen(rule *watcher.Rule) {
 
 	// 监听文件变化，则调用fsnotify
 	if true {
-		watcher.NewFsnotifyWatcher().Listen(rule)
+		go watcher.NewFsnotifyWatcher().Listen(rule)
 	}
 	// 导入目录下原有文件，则调用fspolling
 	if true {
-		watcher.NewFspollingWatcher().Listen(rule)
+		go watcher.NewFspollingWatcher().Listen(rule)
 	}
 
 	done := make(chan bool)
@@ -205,7 +205,7 @@ func (this *Watchdog) getFileMeta(fileEvent fsnotify.FileEvent) (*handler.FileMe
 
 	// fileCreateTime, _ := time.Parse("2006-01-02 15:04:05-0700", "2018-09-28 08:15:22+0000")
 	// TODO:矫正文件的创建时间
-	fileCreateTime := fileTime.ChangeTime().UTC()
+	fileCreateTime := fileTime.ChangeTime()
 
 	return &handler.FileMeta{
 		Filepath:   fileEvent.Name,
@@ -214,7 +214,7 @@ func (this *Watchdog) getFileMeta(fileEvent fsnotify.FileEvent) (*handler.FileMe
 		Ext:        filepath.Ext(fileInfo.Name()),
 		Size:       fileInfo.Size(),
 		CreateTime: fileCreateTime,
-		ModifyTime: fileInfo.ModTime().UTC(),
+		ModifyTime: fileInfo.ModTime(),
 		LastOp:     fileEvent,
 		Host:       this.host,
 	}, nil
@@ -263,7 +263,9 @@ func (this *Watchdog) adapterHandle(files []fsnotify.FileEvent) {
 			}
 
 			// 记录文件最新的md5值
-			bm.Put(file.Name, file.ModTime.String(), 0)
+			this.logger.Info("original file modtime : %s", bm.Get(file.Name))
+			bm.Put(file.Name, fileMeta.ModifyTime.String(), 0)
+			this.logger.Info("changed file modtime : %s", bm.Get(file.Name))
 		}(file)
 	}
 }
