@@ -60,7 +60,7 @@ func (this *CassandraAdapter) Handle(fi FileMeta) error {
 	fi.CompressSize = 0
 	fi.Content = dataBytes
 	fi.Checksum = fmt.Sprintf("%x", md5.Sum(dataBytes))
-	fi.BackUpTime = time.Now().Truncate(time.Millisecond).UTC()
+	fi.BackUpTime = time.Now().UTC()
 
 	/*
 		| Name          | Type      |          Key | Desc                                                                                                                                                                                                           |

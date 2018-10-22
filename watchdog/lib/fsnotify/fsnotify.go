@@ -4,12 +4,14 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type FileEvent struct {
-	Biz  string
-	Op   string
-	Name string
+	Biz     string
+	Op      string
+	Name    string
+	ModTime time.Time
 }
 
 type RecursiveWatcher struct {

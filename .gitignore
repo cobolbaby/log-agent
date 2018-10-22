@@ -2,3 +2,5 @@
 vendor
 debug
 test
+.cache
+.fuse_hidden*

@@ -19,7 +19,10 @@ func (this *FsnotifyWatcher) Listen(rule *Rule) error {
 
 	go watcher.NotifyFsEvent(func(e fsnotify.FileEvent) {
 		e.Biz = rule.Biz
-		rule.DelayQueueChan <- e
+		// 过滤
+		if e.Op == "Create" || e.Op == "Write" {
+			rule.DelayQueueChan <- e
+		}
 	})
 
 	for _, r := range rule.Rules {

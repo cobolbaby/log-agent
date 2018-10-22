@@ -2,6 +2,7 @@ package watchdog
 
 import (
 	"errors"
+	"github.com/astaxie/beego/cache"
 	"github.com/cobolbaby/log-agent/watchdog/handler"
 	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
 	"github.com/cobolbaby/log-agent/watchdog/lib/hook"
@@ -12,7 +13,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	// "sync"
 	"time"
 )
 
@@ -108,7 +108,7 @@ func (this *Watchdog) Listen(rule *watcher.Rule) {
 	// TODO: 获取this.watchers[rule.Biz]，判断是否进行了如下配置
 
 	// 监听文件变化，则调用fsnotify
-	if false {
+	if true {
 		watcher.NewFsnotifyWatcher().Listen(rule)
 	}
 	// 导入目录下原有文件，则调用fspolling
@@ -160,13 +160,7 @@ func (this *Watchdog) Handle(rule *watcher.Rule) {
 }
 
 func (this *Watchdog) handle(fileEvents []fsnotify.FileEvent) {
-	fileEvents = this.filterEvents(fileEvents)
-	changeFileMeta, err := this.getFileMeta(fileEvents)
-	if err != nil {
-		this.logger.Error("[getFileMeta]%s", err)
-		return
-	}
-	this.adapterHandle(changeFileMeta)
+	this.adapterHandle(this.filterEvents(fileEvents))
 }
 
 func (this *Watchdog) filterEvents(fileEvents []fsnotify.FileEvent) []fsnotify.FileEvent {
@@ -183,25 +177,13 @@ func (this *Watchdog) filterEvents(fileEvents []fsnotify.FileEvent) []fsnotify.F
 	return list
 }
 
-func (this *Watchdog) getFileMeta(fileEvents []fsnotify.FileEvent) ([]*handler.FileMeta, error) {
-	var fileMetas []*handler.FileMeta
-	for _, event := range fileEvents {
-		fileMeta, err := this.getOneFileMeta(event)
-		if err != nil {
-			return nil, err
-		}
-		fileMetas = append(fileMetas, fileMeta)
-	}
-	return fileMetas, nil
-}
-
-func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.FileEvent) (*handler.FileMeta, error) {
+func (this *Watchdog) getFileMeta(fileEvent fsnotify.FileEvent) (*handler.FileMeta, error) {
 	fileInfo, err := os.Lstat(fileEvent.Name)
 	if err != nil {
 		return new(handler.FileMeta), err
 	}
 	if fileInfo.IsDir() {
-		return new(handler.FileMeta), errors.New("[getOneFileMeta]仅处理文件，忽略目录")
+		return new(handler.FileMeta), errors.New("[getFileMeta]仅处理文件，忽略目录")
 	}
 
 	// 获取文件目录
@@ -223,7 +205,7 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.FileEvent) (*handler.Fil
 
 	// fileCreateTime, _ := time.Parse("2006-01-02 15:04:05-0700", "2018-09-28 08:15:22+0000")
 	// TODO:矫正文件的创建时间
-	fileCreateTime := fileTime.ChangeTime().Truncate(time.Millisecond).UTC()
+	fileCreateTime := fileTime.ChangeTime().UTC()
 
 	return &handler.FileMeta{
 		Filepath:   fileEvent.Name,
@@ -232,36 +214,42 @@ func (this *Watchdog) getOneFileMeta(fileEvent fsnotify.FileEvent) (*handler.Fil
 		Ext:        filepath.Ext(fileInfo.Name()),
 		Size:       fileInfo.Size(),
 		CreateTime: fileCreateTime,
-		ModifyTime: fileInfo.ModTime().Truncate(time.Millisecond).UTC(),
+		ModifyTime: fileInfo.ModTime().UTC(),
 		LastOp:     fileEvent,
 		Host:       this.host,
 	}, nil
 }
 
-func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
-	// TODO:使用ant控制并发的协程数
-	// TODO:佐证一味地增加协程数并不一定能加快任务执行
-	for _, fi := range files {
-		go func(file *handler.FileMeta) {
+func (this *Watchdog) adapterHandle(files []fsnotify.FileEvent) {
 
-			// TODO:指定需要监控的目录，记录该路径下文件的md5
+	bm, err := cache.NewCache("file", `{"CachePath":"./.cache","FileSuffix":".txt","DirectoryLevel":2, "EmbedExpiry":0}`)
+	if err != nil {
+		this.logger.Error("[NewCache]%s", err)
+		return
+	}
 
-			// TODO:循环遍历该目录，检测文件的变更情况
+	for _, file := range files {
 
-			// TODO:getOneFileMeta方法调用时机调整，防止Handle协程阻塞
+		go func(file fsnotify.FileEvent) {
+			// 获取file简要信息
+			fileMeta, err := this.getFileMeta(file)
+			if err != nil {
+				// TODO:异常处理
+				this.logger.Error("[getFileMeta]%s", err)
+				return
+			}
 
 			// 支持Agent层级的清洗操作
-			// TODO:除了采用hook的机制，其实还可以采用更为简便的方式
-			this.hook.Trigger("CheckFile", file)
-			this.hook.Trigger("Transform", file)
+			this.hook.Trigger("CheckFile", fileMeta)
+			this.hook.Trigger("Transform", fileMeta)
 			// ...
 			// TODO:文件处理异常需要将该文件事件传送会DelayQueueChan
 
 			failure := false
 			// 考虑到失败回滚，采用串行更为便利
-			for _, Adapter := range this.adapters[file.LastOp.Biz] {
+			for _, Adapter := range this.adapters[fileMeta.LastOp.Biz] {
 				Adapter.SetLogger(this.logger)
-				if err := Adapter.Handle(*file); err != nil {
+				if err := Adapter.Handle(*fileMeta); err != nil {
 					// TODO:失败重试
 					this.logger.Error("File Handle Error: %s", err)
 					failure = true
@@ -269,13 +257,14 @@ func (this *Watchdog) adapterHandle(files []*handler.FileMeta) {
 				}
 			}
 			if failure {
-				this.logger.Error("Need To Rollback File: %s", file.Filepath)
-				this.adapterRollback(file)
+				this.logger.Error("Need To Rollback File: %s", fileMeta.Filepath)
+				this.adapterRollback(fileMeta)
+				return
 			}
 
-			// TODO:推送成功之后修改记录文件的md5
-
-		}(fi)
+			// 记录文件最新的md5值
+			bm.Put(file.Name, file.ModTime.String(), 0)
+		}(file)
 	}
 }
 
