@@ -27,10 +27,10 @@ Solving failure: No versions of github.com/fsnotify/fsnotify met constraints:
 - `"X" does not implement "B"(wrong type for method)`
 
 ```
-/opt/workspace/git/go-demo/src/github.com/cobolbaby/log-agent/command/start.go:50:9: cannot use "github.com/cobolbaby/log-agent/watchdog/adapters".FileAdapter literal (type *"github.com/cobolbaby/log-agent/watchdog/adapters".FileAdapter) as type "github.com/cobolbaby/log-agent/watchdog".WatchdogAdapter in argument to watchDog.AddHandler:
-	*"github.com/cobolbaby/log-agent/watchdog/adapters".FileAdapter does not implement "github.com/cobolbaby/log-agent/watchdog".WatchdogAdapter (wrong type for SetLogger method)
-		have SetLogger("github.com/cobolbaby/log-agent/watchdog".Logger) *"github.com/cobolbaby/log-agent/watchdog/adapters".FileAdapter
-		want SetLogger("github.com/cobolbaby/log-agent/watchdog".Logger) "github.com/cobolbaby/log-agent/watchdog".WatchdogAdapter
+/opt/workspace/git/go-demo/src/./command/start.go:50:9: cannot use "./watchdog/adapters".FileAdapter literal (type *"./watchdog/adapters".FileAdapter) as type "./watchdog".WatchdogAdapter in argument to watchDog.AddHandler:
+	*"./watchdog/adapters".FileAdapter does not implement "./watchdog".WatchdogAdapter (wrong type for SetLogger method)
+		have SetLogger("./watchdog".Logger) *"./watchdog/adapters".FileAdapter
+		want SetLogger("./watchdog".Logger) "./watchdog".WatchdogAdapter
 exit status 2
 Process exiting with code: 1
 ```

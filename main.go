@@ -3,7 +3,7 @@ package main
 import (
 	// 需在此处添加代码。[1]
 	"fmt"
-	"github.com/cobolbaby/log-agent/cmd"
+	"./cmd"
 	"os"
 )
 
