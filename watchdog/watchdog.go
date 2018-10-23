@@ -186,28 +186,21 @@ func (this *Watchdog) getFileMeta(fileEvent fsnotify.FileEvent) (*handler.FileMe
 	// 获取文件目录
 	// Ref: https://golang.org/pkg/path/filepath/#Split
 	dirName, _ := filepath.Split(fileEvent.Name)
-	// 获取文件相关时间，支持跨平台
-	// fileTime, err := times.Stat(fileEvent.Name)
-	// if err != nil {
-	// 	return new(FileMeta), err
-	// }
-	// var fileCreateTime time.Time
-	// if fileTime.HasChangeTime() { // 非Win
-	// 	fileCreateTime = fileTime.ChangeTime()
-	// }
-	// if fileTime.HasBirthTime() { // Win
-	// 	fileCreateTime = fileTime.BirthTime()
-	// }
-	fileTime := times.Get(fileInfo)
 
-	// fileCreateTime, _ := time.Parse("2006-01-02 15:04:05-0700", "2018-09-28 08:15:22+0000")
-	// TODO:矫正文件的创建时间
-	fileCreateTime := fileTime.ChangeTime()
+	// 获取文件相关时间，支持跨平台
+	var fileCreateTime time.Time
+	fileTime := times.Get(fileInfo)
+	if fileTime.HasChangeTime() { // 非Win
+		fileCreateTime = fileTime.ChangeTime()
+	}
+	if fileTime.HasBirthTime() { // Win
+		fileCreateTime = fileTime.BirthTime()
+	}
 
 	return &handler.FileMeta{
-		Filepath:   fileEvent.Name,
-		Dirname:    dirName,
-		Filename:   fileInfo.Name(),
+		Filepath:   fileEvent.Name,  // 全路径
+		Dirname:    dirName,         // 文件父目录
+		Filename:   fileInfo.Name(), // 仅文件名
 		Ext:        filepath.Ext(fileInfo.Name()),
 		Size:       fileInfo.Size(),
 		CreateTime: fileCreateTime,

@@ -33,6 +33,10 @@ func main() {
 	case "--help", "-h":
 		fmt.Println(Usage)
 	case "-f":
+		if len(args) < 3 {
+			fmt.Println(Usage)
+			os.Exit(1)
+		}
 		os.Setenv("LOGAGENT_CONF_PATH", args[2])
 		cmd.Start()
 	case "stop", "-q":
