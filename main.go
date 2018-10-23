@@ -30,19 +30,20 @@ func main() {
 		os.Exit(1)
 	}
 	switch args[1] {
-	case "help", "-h":
+	case "--help", "-h":
 		fmt.Println(Usage)
-	case "start":
+	case "-f":
+		os.Setenv("LOGAGENT_CONF_PATH", args[2])
 		cmd.Start()
-	case "stop":
+	case "stop", "-q":
 		cmd.Stop()
-	case "status":
+	case "status", "-s":
 		cmd.Status()
 	case "install":
 		cmd.Install()
 	case "uninstall":
 		cmd.Uninstall()
-	case "test":
+	case "test", "-t":
 		cmd.Test()
 	default:
 		fmt.Println(Usage)
