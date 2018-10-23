@@ -5,7 +5,6 @@ import (
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
 	"github.com/cobolbaby/log-agent/watchdog/handler"
-	"github.com/cobolbaby/log-agent/watchdog/watcher"
 )
 
 type SPI struct {
