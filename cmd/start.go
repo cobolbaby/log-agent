@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"../plugins"
+	"github.com/cobolbaby/log-agent/plugins"
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
 )
