@@ -6,7 +6,7 @@ import (
 	"github.com/cobolbaby/log-agent/watchdog"
 )
 
-func Start() {
+func Run() {
 	// 连接消息总线，维持长连接
 	// 获取主机唯一标示，用于辨识Agent
 	// 订阅最新的配置信息

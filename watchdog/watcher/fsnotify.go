@@ -18,6 +18,7 @@ func (this *FsnotifyWatcher) Listen(rule *Rule) error {
 	defer watcher.Close()
 
 	go watcher.NotifyFsEvent(func(e fsnotify.FileEvent) {
+		// TODO:新增字段ListenRoot
 		e.Biz = rule.Biz
 		// 过滤
 		if e.Op == "Create" || e.Op == "Write" {

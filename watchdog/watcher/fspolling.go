@@ -36,6 +36,7 @@ func (this *FspollingWatcher) Listen(rule *Rule) error {
 				if bm.IsExist(e.Name) && bm.Get(e.Name) == e.ModTime.String() {
 					return
 				}
+				// TODO:新增字段ListenRoot
 				e.Biz = rule.Biz
 				rule.DelayQueueChan <- e
 			})

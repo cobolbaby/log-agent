@@ -27,6 +27,10 @@ type CassandraAdapterCfg struct {
 	TableName string
 }
 
+func NewCassandraAdapter() {
+
+}
+
 func (this *CassandraAdapter) SetLogger(logger log.Logger) {
 	this.logger = logger
 }

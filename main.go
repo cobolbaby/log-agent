@@ -2,9 +2,11 @@ package main
 
 import (
 	// 需在此处添加代码。[1]
-	"fmt"
-	"github.com/cobolbaby/log-agent/cmd"
+	"dc-agent-go/cmd"
+	"log"
 	"os"
+
+	"github.com/kardianos/service"
 )
 
 const Usage = `
@@ -17,39 +19,71 @@ const Usage = `
     -v, --version     output version
 `
 
-func init() {
+type program struct{}
 
+func (p *program) Start(s service.Service) error {
+	go p.run()
+	return nil
+}
+
+func (p *program) run() {
+	cmd.Run()
+}
+
+func (p *program) Stop(s service.Service) error {
+	return nil
 }
 
 func main() {
+
+	//服务的配置信息
+	cfg := &service.Config{
+		Name:      "DCAgent",
+		Arguments: []string{"-c", "./conf/agent.ini"},
+	}
+	// Interface 接口
+	prg := &program{}
+	// 构建服务对象
+	s, err := service.New(prg, cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// logger 用于记录系统日志
+	logger, err := s.Logger(nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// 依据传入参数来决定是执行start/status/stop
 	// os.Args 提供原始命令行参数访问功能。注意，切片中的第一个参数是该程序的路径，并且 os.Args[1:]保存所有程序的的参数。
 	args := os.Args
 	if len(args) < 2 {
-		fmt.Println(Usage)
+		log.Println(Usage)
 		os.Exit(1)
 	}
 	switch args[1] {
-	case "--help", "-h":
-		fmt.Println(Usage)
-	case "-f":
+	case "-c":
 		if len(args) < 3 {
-			fmt.Println(Usage)
+			log.Println(Usage)
 			os.Exit(1)
 		}
 		os.Setenv("LOGAGENT_CONF_PATH", args[2])
-		cmd.Start()
-	case "stop", "-q":
-		cmd.Stop()
-	case "status", "-s":
-		cmd.Status()
-	case "install":
-		cmd.Install()
-	case "uninstall":
-		cmd.Uninstall()
-	case "test", "-t":
+		if err = s.Run(); err != nil {
+			logger.Error(err)
+		}
+	case "-t":
+		if len(args) < 3 {
+			log.Println(Usage)
+			os.Exit(1)
+		}
+		os.Setenv("LOGAGENT_CONF_PATH", args[2])
 		cmd.Test()
+	case "start", "stop", "restart", "install", "uninstall":
+		// Ps: 需要拥有管理员的权限
+		if err = service.Control(s, os.Args[1]); err != nil {
+			log.Fatal(err)
+		}
 	default:
-		fmt.Println(Usage)
+		log.Println(Usage)
 	}
 }
