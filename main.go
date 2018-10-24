@@ -5,7 +5,9 @@ import (
 	"dc-agent-go/cmd"
 	"log"
 	"os"
+	"path/filepath"
 
+	"github.com/kardianos/osext"
 	"github.com/kardianos/service"
 )
 
@@ -34,14 +36,27 @@ func (p *program) Stop(s service.Service) error {
 	return nil
 }
 
+func getConfigPath() (string, error) {
+	fullexecpath, err := osext.Executable()
+	if err != nil {
+		return "", err
+	}
+
+	dir, _ := filepath.Split(fullexecpath)
+	return filepath.Join(dir, "conf/logagent.ini"), nil
+}
+
 func main() {
 
 	//服务的配置信息
-	cfg := &service.Config{
-		Name:      "DCAgent",
-		Arguments: []string{"-c", "./conf/agent.ini"},
+	configPath, err := getConfigPath()
+	if err != nil {
+		log.Fatal(err)
 	}
-	// Interface 接口
+	cfg := &service.Config{
+		Name:      "LogFileAgent",
+		Arguments: []string{"-c", configPath},
+	}
 	prg := &program{}
 	// 构建服务对象
 	s, err := service.New(prg, cfg)
