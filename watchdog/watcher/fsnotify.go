@@ -1,41 +1,49 @@
 package watcher
 
 import (
-	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
+	"dc-agent-go/watchdog/lib/fsnotify"
+	"dc-agent-go/watchdog/lib/log"
 )
 
-type FsnotifyWatcher struct{}
+type FsnotifyWatcher struct {
+	logger *log.LogMgr
+}
 
-func NewFsnotifyWatcher() *FsnotifyWatcher {
+func NewFsnotifyWatcher() Watcher {
 	return &FsnotifyWatcher{}
 }
 
-func (this *FsnotifyWatcher) Listen(rule *Rule) error {
+func (this *FsnotifyWatcher) SetLogger(logger *log.LogMgr) Watcher {
+	this.logger = logger
+	return this
+}
+
+func (this *FsnotifyWatcher) Listen(rule *Rule, taskChan chan fsnotify.FileEvent) error {
+	// 当前仅支持监控单一目录
+	monitorDir := rule.Rules[0]
+
 	watcher, err := fsnotify.NewRecursiveWatcher()
 	if err != nil {
 		return err
 	}
-	defer watcher.Close()
+	// defer watcher.Close()
 
-	go watcher.NotifyFsEvent(func(e fsnotify.FileEvent) {
-		// TODO:新增字段ListenRoot
-		e.Biz = rule.Biz
+	go watcher.NotifyFsEvent(monitorDir, func(err error, e fsnotify.FileEvent) {
+		if err != nil {
+			this.logger.Error("[NotifyFsEvent] %s", err)
+			return
+		}
 		// 过滤
 		if e.Op == "Create" || e.Op == "Write" {
-			rule.DelayQueueChan <- e
+			e.Biz = rule.Biz
+			taskChan <- e
 		}
 	})
 
-	for _, r := range rule.Rules {
-		err := watcher.RecursiveAdd(r)
-		if err != nil {
-			return err
-		}
+	err = watcher.RecursiveAdd(monitorDir)
+	if err != nil {
+		return err
 	}
-
-	done := make(chan bool)
-	// 如果done中还没放数据，那main挂起，直到放数据为止
-	<-done
 
 	return nil
 }

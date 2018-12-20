@@ -1,75 +1,77 @@
 package watcher
 
 import (
+	"dc-agent-go/watchdog/lib/fsnotify"
+	"dc-agent-go/watchdog/lib/log"
 	"github.com/astaxie/beego/cache"
-	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
 	"io/ioutil"
+	"os"
 	"path/filepath"
-	"sync"
+	"time"
 )
 
-var (
-	sema   = make(chan struct{}, 255) // sema is a counting semaphore for limiting concurrency
-	syncWg sync.WaitGroup
-)
-
-type FspollingWatcher struct{}
-
-func NewFspollingWatcher() *FspollingWatcher {
-	return &FspollingWatcher{}
+type FspollingWatcher struct {
+	logger   *log.LogMgr
+	interval time.Duration
 }
 
-func (this *FspollingWatcher) Listen(rule *Rule) error {
+func NewFspollingWatcher(interval time.Duration) Watcher {
+	return &FspollingWatcher{
+		interval: interval,
+	}
+}
 
-	bm, err := cache.NewCache("file", `{"CachePath":"./.cache","FileSuffix":".txt","DirectoryLevel":2, "EmbedExpiry":0}`)
-	if err != nil {
+func (this *FspollingWatcher) SetLogger(logger *log.LogMgr) Watcher {
+	this.logger = logger
+	return this
+}
+
+func (this *FspollingWatcher) Listen(rule *Rule, taskChan chan fsnotify.FileEvent) error {
+	// 当前仅支持监控单一目录
+	monitorDir := rule.Rules[0]
+	if _, err := ioutil.ReadDir(monitorDir); err != nil {
 		return err
 	}
 
-	for _, dir := range rule.Rules {
-		syncWg.Add(1)
-		go func(dir string) {
-			defer syncWg.Done()
+	bm, _ := cache.NewCache("file", `{"CachePath":"./.cache","FileSuffix":".txt","DirectoryLevel":2, "EmbedExpiry":0}`)
 
-			walkDir(dir, func(e fsnotify.FileEvent) {
+	go func() {
+		for {
+			this.logger.Info("[FspollingWatcher] %s LoopScan Start, Path: %s", rule.Biz, monitorDir)
+			affectedNum := 0
+			walkDir(monitorDir, func(e fsnotify.FileEvent) {
 				// 检测文件的变更情况
 				if bm.IsExist(e.Name) && bm.Get(e.Name) == e.ModTime.String() {
 					return
 				}
-				// TODO:新增字段ListenRoot
 				e.Biz = rule.Biz
-				rule.DelayQueueChan <- e
+				e.MonitorDir = monitorDir
+				taskChan <- e
+				affectedNum++
 			})
-		}(dir)
-	}
-	syncWg.Wait()
+			this.logger.Info("[FspollingWatcher] %s LoopScan End, AffectedNum: %d", rule.Biz, affectedNum)
+			// 可以考虑加部分抖动
+			time.Sleep(this.interval)
+		}
+	}()
+
 	return nil
 }
 
-func walkDir(dir string, cb func(e fsnotify.FileEvent)) error {
-	sema <- struct{}{} // acquire token
-	defer func() {     // release token
-		<-sema
-	}()
-	entries, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
+func walkDir(monitorDir string, cb func(e fsnotify.FileEvent)) {
+	dir, _ := os.Open(monitorDir)
+	defer dir.Close()
+	// unsorted file list
+	fis, _ := dir.Readdir(-1)
+	for _, fi := range fis {
+		if !fi.IsDir() {
 			cb(fsnotify.FileEvent{
+				ModTime: fi.ModTime(),
 				Op:      "LOAD",
-				Name:    filepath.Join(dir, e.Name()),
-				ModTime: e.ModTime(),
+				Name:    filepath.Join(monitorDir, fi.Name()),
 			})
 			continue
 		}
-		syncWg.Add(1)
-		go func(path string) {
-			defer syncWg.Done()
-
-			walkDir(path, cb)
-		}(filepath.Join(dir, e.Name()))
+		walkDir(filepath.Join(monitorDir, fi.Name()), cb)
 	}
-	return nil
 }

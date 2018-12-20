@@ -1,21 +1,26 @@
 package handler
 
 import (
-	"github.com/cobolbaby/log-agent/watchdog/lib/log"
-	"time"
+	"dc-agent-go/watchdog/lib/log"
 )
 
 type ConsoleAdapter struct {
 	Name     string
 	Config   *ConsoleAdapterCfg
-	logger   log.Logger
+	logger   *log.LogMgr
 	Priority uint8
 }
 
 type ConsoleAdapterCfg struct {
 }
 
-func (this *ConsoleAdapter) SetLogger(logger log.Logger) {
+func NewConsoleAdapter() (WatchdogHandler, error) {
+	return &ConsoleAdapter{
+		Name: "Console",
+	}, nil
+}
+
+func (this *ConsoleAdapter) SetLogger(logger *log.LogMgr) {
 	this.logger = logger
 }
 
@@ -25,8 +30,7 @@ func (this *ConsoleAdapter) GetPriority() uint8 {
 
 func (this *ConsoleAdapter) Handle(fi FileMeta) error {
 	// write the filename to stdout
-	this.logger.Info("[ConsoleAdapter] -------------  %s  -------------", time.Now().Format("2006/1/2 15:04:05"))
-	this.logger.Info("[ConsoleAdapter] %s %s", fi.LastOp.Op, fi.Filepath)
+	this.logger.Debug("[ConsoleAdapter] %s %s", fi.Filepath, fi.LastOp.Op)
 	return nil
 }
 

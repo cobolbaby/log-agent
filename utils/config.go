@@ -1,52 +1,30 @@
 package utils
 
 import (
-	"github.com/astaxie/beego/config"
+	"github.com/go-ini/ini"
+	"log"
 	"os"
-)
-
-const (
-	// TODO:优化配置路径，不能采用相对路径或者绝对路径，需要外部传递
-	DEFAULT_CONF_PATH = "./conf/logagent.ini"
+	"path/filepath"
 )
 
 var (
-	iniCfg config.Configer
+	iniCfg *ini.File
 )
 
-func ConfigMgr() config.Configer {
+func ConfigMgr() *ini.File {
 	if iniCfg != nil {
 		return iniCfg
 	}
-	filename := os.Getenv("LOGAGENT_CONF_PATH")
-	if filename == "" {
-		filename = DEFAULT_CONF_PATH
+	filename := filepath.Join("conf", "logagent.ini")
+	if len(os.Args) == 3 && os.Args[1] == "-c" {
+		filename = os.Args[2]
 	}
 	var err error
-	iniCfg, err = config.NewConfig("ini", filename)
+	iniCfg, err = ini.LoadSources(ini.LoadOptions{
+		SkipUnrecognizableLines: true,
+	}, filename)
 	if err != nil {
-		panic("Failed to Load configuration. Please make sure that the configuration exists")
+		log.Fatalf("Failed to Load configuration: %v", err)
 	}
-
-	// iniCfg如何转化为Map对象
-	// listenFileStr := conf.String("listen_file")
-	// fileSlice := strings.Split(listenFileStr, ",")
-	// for _, item := range fileSlice {
-	// 	filename := strings.TrimSpace(item)
-	// 	if len(filename) == 0 {
-	// 		continue
-	// 	}
-	// 	appConfig.ListenFile = append(appConfig.ListenFile, filename)
-	// }
-
-	// appConfig.ThreadNum = conf.DefaultInt("thread_num", 8)
-	// appConfig.KafkaAddr = conf.String("kafka::addr")
-	// appConfig.KafkaTopic = conf.String("kafka::topic")
-	// appConfig.LogFile = conf.String("log::file")
-	// appConfig.LogLevel = conf.String("log::level")
-	// return
-
-	// 如何实现热加载
-
 	return iniCfg
 }

@@ -1,21 +1,20 @@
 package handler
 
 import (
-	"github.com/cobolbaby/log-agent/watchdog/lib/log"
-	"time"
+	"dc-agent-go/watchdog/lib/log"
 )
 
 type RabbitmqAdapter struct {
 	Name     string
 	Config   *RabbitmqAdapterCfg
-	logger   log.Logger
+	logger   *log.LogMgr
 	Priority uint8
 }
 
 type RabbitmqAdapterCfg struct {
 }
 
-func (this *RabbitmqAdapter) SetLogger(logger log.Logger) {
+func (this *RabbitmqAdapter) SetLogger(logger *log.LogMgr) {
 	this.logger = logger
 }
 
@@ -24,9 +23,9 @@ func (this *RabbitmqAdapter) GetPriority() uint8 {
 }
 
 func (this *RabbitmqAdapter) Handle(fi FileMeta) error {
-	// write the filename to stdout
-	this.logger.Info("[RabbitmqAdapter] -------------  %s  -------------", time.Now().Format("2006/1/2 15:04:05"))
-	this.logger.Info("%s FILE: %s", fi.LastOp.Op, fi.Filepath)
+	// TODO:推送消息的结构体，如何标准化
+	this.logger.Debug("[RabbitmqAdapter] %s %s", fi.Filepath, fi.LastOp.Op)
+
 	return nil
 }
 

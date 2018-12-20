@@ -1,32 +1,32 @@
 package cmd
 
 import (
-	"github.com/cobolbaby/log-agent/plugins"
-	. "github.com/cobolbaby/log-agent/utils"
-	"github.com/cobolbaby/log-agent/watchdog"
+	"dc-agent-go/plugins"
+	. "dc-agent-go/utils"
+	"dc-agent-go/watchdog"
+	"dc-agent-go/watchdog/lib/log"
+	"github.com/kardianos/osext"
+	"path/filepath"
 )
 
 func Run() {
-	// 连接消息总线，维持长连接
-	// 获取主机唯一标示，用于辨识Agent
-	// 订阅最新的配置信息
+	cfg := ConfigMgr()
 
-	agentSwitch, err := ConfigMgr().Bool("agent::switch")
-	if err != nil {
-		LogMgr().Error("undefined agent::switch")
-		return
-	}
+	fullexecpath, _ := osext.Executable()
+	execdir, _ := filepath.Split(fullexecpath)
+	logger := log.NewLogMgr(filepath.Join(execdir, "logs"))
+
+	agentSwitch := cfg.Section("").Key("switch").MustBool()
 	if !agentSwitch {
-		LogMgr().Info("LogAgent Monitor Switch State: %s :)", ConfigMgr().String("agent::switch"))
-		return
+		logger.Fatal("LogAgent Monitor Switch Close :)")
+	}
+	if cfg.Section("").Key("hostname").Value() == "localhost" {
+		logger.Fatal("Please Modify hostname in logagent.ini :)")
 	}
 
-	watchDog := watchdog.NewWatchdog()
-	watchDog.SetHost(ConfigMgr().String("agent::host"))
-	watchDog.SetLogger(LogMgr())
-	watchDog.LoadPlugins(plugins.SPIServiceWorker())
-	// watchDog.LoadPlugins(plugins.SPIServiceWorker())
-	// watchDog.LoadPlugins(plugins.SPIServiceWorker())
-	// watchDog.LoadPlugins(plugins.SPIServiceWorker())
-	watchDog.Run()
+	watchdog.NewWatchdog().
+		SetHost(cfg.Section("").Key("hostname").Value()).
+		SetLogger(logger).
+		LoadPlugins(plugins.Autoload()).
+		Run()
 }

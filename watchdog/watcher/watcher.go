@@ -1,18 +1,21 @@
 package watcher
 
 import (
-	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
-	"time"
+	"dc-agent-go/watchdog/lib/fsnotify"
+	"dc-agent-go/watchdog/lib/log"
 )
 
 type Rule struct {
-	Biz            string
-	Rules          []string
-	DelayQueueChan chan fsnotify.FileEvent
-	Delay          time.Duration
-	TaskQueueChan  chan []fsnotify.FileEvent
+	Biz   string
+	Rules []string
 }
 
 type Watcher interface {
-	Listen(rule *Rule) error
+	Listen(rule *Rule, taskChan chan fsnotify.FileEvent) error
+	SetLogger(logger *log.LogMgr) Watcher
 }
+
+const (
+	Fsnotify  = "fsnotify"
+	Fspolling = "fspolling"
+)

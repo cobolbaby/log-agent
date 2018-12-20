@@ -6,9 +6,9 @@ import (
 	"reflect"
 )
 
-// 插件实现的钩子支持自定义，没有严格的限制
+// 完全自主定义
 type AdvancePlugin interface {
-	IsActive() bool
+	Name() string
 }
 
 type AdvanceHook struct {
@@ -20,15 +20,11 @@ func NewAdvanceHook() *AdvanceHook {
 }
 
 func (this *AdvanceHook) Import(plugins ...AdvancePlugin) {
-	for _, plugin := range plugins {
-		if !reflect.ValueOf(plugin).MethodByName("IsActive").IsValid() {
-			continue
-		}
-		if !plugin.IsActive() {
-			continue
-		}
-		this.plugins = append(this.plugins, plugin)
-	}
+	this.plugins = plugins
+}
+
+func (this *AdvanceHook) GetPlugins() []AdvancePlugin {
+	return this.plugins
 }
 
 func (this *AdvanceHook) Get(hook string) []AdvancePlugin {
@@ -64,13 +60,19 @@ func (this *AdvanceHook) exec(plugin AdvancePlugin, hook string, args ...interfa
 		return errors.New(msg)
 	}
 	if len(args) == 0 {
-		f.Call(nil)
+		res := f.Call(nil)
+		if res[0].Interface() != nil {
+			return res[0].Interface().(error)
+		}
 		return nil
 	}
 	inputs := make([]reflect.Value, len(args))
 	for i, _ := range args {
 		inputs[i] = reflect.ValueOf(args[i])
 	}
-	f.Call(inputs)
+	res := f.Call(inputs)
+	if res[0].Interface() != nil {
+		return res[0].Interface().(error)
+	}
 	return nil
 }

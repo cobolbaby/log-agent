@@ -1,33 +1,40 @@
 package handler
 
 import (
-	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
-	"github.com/cobolbaby/log-agent/watchdog/lib/log"
+	"dc-agent-go/watchdog/lib/fsnotify"
+	"dc-agent-go/watchdog/lib/log"
 	"time"
 )
 
 type FileMeta struct {
 	Filepath     string
 	Pack         string
-	Dirname      string
+	SubDir       string
 	Filename     string
 	Size         int64 // 字节
 	Ext          string
-	CreateTime   time.Time
-	ModifyTime   time.Time
+	CreateTime   time.Time // 文件创建时间
+	ModifyTime   time.Time // 文件修改时间
 	Content      []byte
 	LastOp       fsnotify.FileEvent
-	BackUpTime   time.Time // 文件备份时间
 	Checksum     string
 	Compress     bool
 	CompressSize int64
-	Reference    string // 保留字段
-	Host         string // 文件溯源
+	Reference    string    // 保留字段
+	Host         string    // 文件溯源
+	FolderTime   time.Time // 文件所在目录的创建时间
 }
 
 type WatchdogHandler interface {
 	Handle(file FileMeta) error
 	Rollback(file FileMeta) error
-	SetLogger(logger log.Logger)
+	SetLogger(logger *log.LogMgr)
 	GetPriority() uint8
 }
+
+const (
+	Cassandra = "cassandra"
+	Console   = "console"
+	File      = "file"
+	RabbitMQ  = "rabbitmq"
+)
