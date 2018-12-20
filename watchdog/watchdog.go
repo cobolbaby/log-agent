@@ -1,11 +1,11 @@
 package watchdog
 
 import (
-	"dc-agent-go/watchdog/handler"
-	"dc-agent-go/watchdog/lib/fsnotify"
-	"dc-agent-go/watchdog/lib/hook"
-	"dc-agent-go/watchdog/lib/log"
-	"dc-agent-go/watchdog/watcher"
+	"github.com/cobolbaby/log-agent/watchdog/handler"
+	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
+	"github.com/cobolbaby/log-agent/watchdog/lib/hook"
+	"github.com/cobolbaby/log-agent/watchdog/lib/log"
+	"github.com/cobolbaby/log-agent/watchdog/watcher"
 	"github.com/Jeffail/tunny"
 	"github.com/astaxie/beego/cache"
 	"github.com/bcicen/grmon/agent"

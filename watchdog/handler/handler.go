@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"dc-agent-go/watchdog/lib/fsnotify"
-	"dc-agent-go/watchdog/lib/log"
+	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
+	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"time"
 )
 

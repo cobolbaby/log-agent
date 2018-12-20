@@ -1,10 +1,10 @@
 package plugins
 
 import (
-	. "dc-agent-go/utils"
-	"dc-agent-go/watchdog"
-	"dc-agent-go/watchdog/handler"
-	"dc-agent-go/watchdog/lib/hook"
+	. "github.com/cobolbaby/log-agent/utils"
+	"github.com/cobolbaby/log-agent/watchdog"
+	"github.com/cobolbaby/log-agent/watchdog/handler"
+	"github.com/cobolbaby/log-agent/watchdog/lib/hook"
 	"errors"
 	"fmt"
 	"github.com/go-ini/ini"

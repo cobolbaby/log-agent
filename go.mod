@@ -1,4 +1,4 @@
-module dc-agent-go
+module github.com/cobolbaby/log-agent
 
 require (
 	github.com/Jeffail/tunny v0.0.0-20180304204616-59cfa8fcb19f

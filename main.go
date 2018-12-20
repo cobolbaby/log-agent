@@ -2,7 +2,7 @@ package main
 
 import (
 	// 需在此处添加代码。[1]
-	"dc-agent-go/cmd"
+	"github.com/cobolbaby/log-agent/cmd"
 	"github.com/kardianos/osext"
 	"github.com/kardianos/service"
 	"log"

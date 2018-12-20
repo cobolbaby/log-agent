@@ -10,7 +10,7 @@ Fetching sources...
 
 Solving failure: No versions of github.com/fsnotify/fsnotify met constraints:
 	v1.4.7: unable to deduce repository and source type for "golang.org/x/sys/unix": unable to read metadata: go-import metadata not found
-	v1.4.2: Could not introduce github.com/fsnotify/fsnotify@v1.4.2, as it is not allowed by constraint ^1.4.7 from project dc-agent-go.
+	v1.4.2: Could not introduce github.com/fsnotify/fsnotify@v1.4.2, as it is not allowed by constraint ^1.4.7 from project github.com/cobolbaby/log-agent.
 
 ```
 

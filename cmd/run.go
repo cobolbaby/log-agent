@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"dc-agent-go/plugins"
-	. "dc-agent-go/utils"
-	"dc-agent-go/watchdog"
-	"dc-agent-go/watchdog/lib/log"
+	"github.com/cobolbaby/log-agent/plugins"
+	. "github.com/cobolbaby/log-agent/utils"
+	"github.com/cobolbaby/log-agent/watchdog"
+	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"github.com/kardianos/osext"
 	"path/filepath"
 )

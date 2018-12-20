@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"dc-agent-go/watchdog/lib/log"
+	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 )
 
 type ConsoleAdapter struct {

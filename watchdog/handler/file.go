@@ -1,8 +1,8 @@
 package handler
 
 import (
-	timeUtil "dc-agent-go/watchdog/lib/ctime"
-	"dc-agent-go/watchdog/lib/log"
+	timeUtil "github.com/cobolbaby/log-agent/watchdog/lib/ctime"
+	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"github.com/otiai10/copy"
 	"path"
 	"syscall"
