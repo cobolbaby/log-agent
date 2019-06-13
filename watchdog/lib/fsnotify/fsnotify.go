@@ -4,6 +4,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
@@ -42,7 +43,7 @@ func (w *RecursiveWatcher) NotifyFsEvent(monitorDir string, cb func(err error, e
 					continue
 				}
 				if fi.IsDir() {
-					w.RecursiveAdd(event.Name)
+					w.RecursiveAdd(event.Name, ".*")
 				}
 				cb(nil, FileEvent{
 					Op:         "Create",
@@ -98,7 +99,7 @@ func (w *RecursiveWatcher) NotifyFsEvent(monitorDir string, cb func(err error, e
 	}
 }
 
-func (w *RecursiveWatcher) RecursiveAdd(name string) error {
+func (w *RecursiveWatcher) RecursiveAdd(name string, exp string) error {
 	fi, err := os.Stat(name)
 	if err != nil {
 		return err
@@ -109,27 +110,24 @@ func (w *RecursiveWatcher) RecursiveAdd(name string) error {
 		}
 		return nil
 	}
-	// 	for _, skipDir := range s.SkipDirs {
-	// 		if skipDir == "" {
-	// 			continue
-	// 		}
-	// 		if strings.HasPrefix(path, filepath.Join(s.WorkDir, skipDir)) {
-	// 			return filepath.SkipDir
-	// 		}
-	// 	}
-	filepath.Walk(name, func(path string, info os.FileInfo, err error) error {
+	var re *regexp.Regexp
+	if exp != ".*" && exp != "" {
+		re = regexp.MustCompile(exp)
+	}
+	return filepath.Walk(name, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		// if re.MatchString(fn) == false {
-		// 	return nil
-		// }
-		if info.IsDir() {
-			w.Add(path)
+		if !info.IsDir() {
+			return nil
 		}
-		return nil
+		// 非匹配项不实时监控
+		if re != nil && !re.MatchString(filepath.ToSlash(path)) {
+			// 匹配规则中分隔符写法仅支持Linux风格
+			return nil
+		}
+		return w.Add(path)
 	})
-	return nil
 }
 
 /*
@@ -175,7 +173,7 @@ func (w *RecursiveWatcher) RecursiveRemove(name string) error {
 		}
 		return nil
 	}
-	filepath.Walk(name, func(path string, info os.FileInfo, err error) error {
+	return filepath.Walk(name, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -184,5 +182,4 @@ func (w *RecursiveWatcher) RecursiveRemove(name string) error {
 		}
 		return nil
 	})
-	return nil
 }

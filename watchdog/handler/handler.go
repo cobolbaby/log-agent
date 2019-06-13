@@ -1,8 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
 	"github.com/cobolbaby/log-agent/watchdog/lib/log"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
+	"io/ioutil"
 	"time"
 )
 
@@ -36,5 +40,17 @@ const (
 	Cassandra = "cassandra"
 	Console   = "console"
 	File      = "file"
-	RabbitMQ  = "rabbitmq"
+	RABBITMQ  = "rabbitmq"
+	KAFKA     = "kafka"
 )
+
+// GBK转化为UTF8
+func GBKToUTF8(src string) (string, error) {
+	I := bytes.NewReader([]byte(src))
+	O := transform.NewReader(I, simplifiedchinese.GBK.NewDecoder())
+	res, e := ioutil.ReadAll(O)
+	if e != nil {
+		return "", e
+	}
+	return string(res), nil
+}

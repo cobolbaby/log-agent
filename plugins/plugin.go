@@ -62,7 +62,8 @@ func (this *DefaultPlugin) IsActive() bool {
 func (this *DefaultPlugin) AutoCheck(watchDog *watchdog.Watchdog) error {
 	watchDog.Logger.Info(this.Name() + " AutoCheck")
 
-	for _, k := range []string{"watch", "cassandra_keyspace", "cassandra_table"} {
+	// for _, k := range []string{"watch", "cassandra_keyspace", "cassandra_table"} {
+	for _, k := range []string{"watch", "kafka_brokers", "kafka_topic"} {
 		if this.Config.HasKey(k) && this.Config.Key(k).Value() != "" {
 			continue
 		}
@@ -73,12 +74,19 @@ func (this *DefaultPlugin) AutoCheck(watchDog *watchdog.Watchdog) error {
 }
 
 // 确认文件是否需要处理，或者是否存在异常
+// 即便错误也不应该影响程序执行，需要将错误抛出
 func (this *DefaultPlugin) CheckFile(watchDog *watchdog.Watchdog, file *handler.FileMeta) error {
 	if file.LastOp.Biz != this.Name() {
 		return nil
 	}
 
 	// 扩展代码...
+	// 检查即时生成文件的创建时间，确认机器时间设置是否正确
+	// 如果时间区间偏差太大，则延迟抛出问
+	// 如何通过检查的结果控制后续流程是否执行
+	if file.LastOp.Op != "LOAD" {
+		return nil
+	}
 
 	return nil
 }
@@ -98,17 +106,29 @@ func (this *DefaultPlugin) Transform(watchDog *watchdog.Watchdog, file *handler.
 func (this *DefaultPlugin) AutoInit(watchDog *watchdog.Watchdog) error {
 	watchDog.Logger.Info(this.Name() + " AutoInit")
 
-	CassandraAdapter, err := handler.NewCassandraAdapter(&handler.CassandraAdapterCfg{
-		Hosts:     this.Config.Key("cassandra_hosts").Value(),
-		Keyspace:  this.Config.Key("cassandra_keyspace").Value(),
-		TableName: this.Config.Key("cassandra_table").Value(),
+	watchDog.SetRules(this.Name(), this.Config.Key("watch").Value(), this.Config.Key("regexp").Value())
+
+	// 历史版本直接上传Cassandra
+	// CassandraAdapter, err := handler.NewCassandraAdapter(&handler.CassandraAdapterCfg{
+	// 	Hosts:     this.Config.Key("cassandra_hosts").Value(),
+	// 	Keyspace:  this.Config.Key("cassandra_keyspace").Value(),
+	// 	TableName: this.Config.Key("cassandra_table").Value(),
+	// })
+	// if err != nil {
+	// 	return err
+	// }
+	// watchDog.AddHandler(this.Name(), CassandraAdapter)
+
+	// 新版本先上传至Kafka
+	KafkaAdapter, err := handler.NewKafkaAdapter(&handler.KafkaAdapterCfg{
+		Brokers:  this.Config.Key("kafka_brokers").Value(),
+		Topic:    this.Config.Key("kafka_topic").Value(),
+		SchemaID: this.Config.Key("kafka_schema_id").MustUint(),
 	})
 	if err != nil {
 		return err
 	}
-	watchDog.
-		SetRules(this.Name(), this.Config.Key("watch").Value()).
-		AddHandler(this.Name(), CassandraAdapter)
+	watchDog.AddHandler(this.Name(), KafkaAdapter)
 
 	// 根据配置判断是否进行加载
 	if this.Config.HasKey("backup") && this.Config.Key("backup").Value() != "" {
@@ -153,7 +173,10 @@ func Autoload() []hook.AdvancePlugin {
 		}
 		plugin := reflect.New(t).Interface().(Plugin)
 		// 动态设置配置信息
-		v.NewKey("cassandra_hosts", cfg.Section("CASSANDRA").Key("hosts").Value())
+		// 历史版本直接上传Cassandra
+		// v.NewKey("cassandra_hosts", cfg.Section("CASSANDRA").Key("hosts").Value())
+		// 新版本先上传至Kafka
+		v.NewKey("kafka_brokers", cfg.Section("KAFKA").Key("brokers").Value())
 		plugin.SetAttr("BizName", v.Name()).SetAttr("Config", v)
 		// 判断插件是否处于激活状态
 		if !plugin.IsActive() {

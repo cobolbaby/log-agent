@@ -27,8 +27,7 @@ func (this *FspollingWatcher) SetLogger(logger *log.LogMgr) Watcher {
 }
 
 func (this *FspollingWatcher) Listen(rule *Rule, taskChan chan fsnotify.FileEvent) error {
-	// 当前仅支持监控单一目录
-	monitorDir := rule.Rules[0]
+	monitorDir := rule.Path
 	if _, err := ioutil.ReadDir(monitorDir); err != nil {
 		return err
 	}

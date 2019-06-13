@@ -2,14 +2,11 @@ package handler
 
 import (
 	"archive/zip"
-	"bytes"
 	"crypto/md5"
 	"github.com/cobolbaby/log-agent/watchdog/lib/compress"
 	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"fmt"
 	"github.com/gocql/gocql"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -22,7 +19,7 @@ const (
 )
 
 var (
-	connections = make(map[string]*gocql.Session)
+	CassandraInstances = make(map[string]*gocql.Session)
 )
 
 type CassandraAdapter struct {
@@ -102,17 +99,6 @@ func (this *CassandraAdapter) uploadUnArchivedFile(fi *FileMeta) error {
 	return this.upload(fi)
 }
 
-// GBK转化为UTF8
-func GBKToUTF8(src string) (string, error) {
-	I := bytes.NewReader([]byte(src))
-	O := transform.NewReader(I, simplifiedchinese.GBK.NewDecoder())
-	res, e := ioutil.ReadAll(O)
-	if e != nil {
-		return "", e
-	}
-	return string(res), nil
-}
-
 func (this *CassandraAdapter) uploadZipedFile(fi *FileMeta) error {
 	if fi.Size == 0 {
 		this.logger.Error("[CassandraAdapter] %s is not a valid zip", fi.Filepath)
@@ -122,6 +108,7 @@ func (this *CassandraAdapter) uploadZipedFile(fi *FileMeta) error {
 		// return this.uploadUnArchivedFile(fi)
 	}
 
+	// TODO:完善失败重试机制
 	// Open a zip archive for reading.
 	r, err := zip.OpenReader(fi.Filepath)
 	if err != nil {
@@ -224,8 +211,9 @@ func (this *CassandraAdapter) upload(fi *FileMeta) error {
 
 // 如果新增的记录主键已经存在，则更新历史记录
 func (this *CassandraAdapter) Insert(item *FileMeta) error {
-	// file_date -- 当前时区时间，该字段仅为了方便业务查询，不用细究正确性
-	// file_time -- UTC时间
+	// file_date -- 当前时区时间-日期，该字段仅为方便业务查询
+	// file_time -- 当前时区时间-日期+时间
+	// 需要注意的是Cassandra中记录的时间取决于Cassandra部署节点配置的时区
 
 	q := this.Session.Query(`
 		INSERT INTO `+this.Config.TableName+`
@@ -293,7 +281,7 @@ func (this *CassandraAdapter) Rollback(fi FileMeta) error {
 func (this *CassandraAdapter) CreateSession() error {
 
 	key := strings.Join([]string{"cassandra", "keyspace", this.Config.Keyspace}, ":")
-	if session, ok := connections[key]; ok {
+	if session, ok := CassandraInstances[key]; ok {
 		this.Session = session
 		return nil
 	}
@@ -329,8 +317,8 @@ func (this *CassandraAdapter) CreateSession() error {
 		return err
 	}
 
+	CassandraInstances[key] = session
 	this.Session = session
-	connections[key] = session
 	return nil
 }
 

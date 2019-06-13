@@ -1,7 +1,6 @@
 .vscode
 vendor
 debug
-test
 .cache
 .fuse*
 logs

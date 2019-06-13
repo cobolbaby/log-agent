@@ -6,8 +6,9 @@ import (
 )
 
 type Rule struct {
-	Biz   string
-	Rules []string
+	Biz    string
+	Path   string
+	Regexp string
 }
 
 type Watcher interface {

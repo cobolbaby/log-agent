@@ -19,8 +19,6 @@ func (this *FsnotifyWatcher) SetLogger(logger *log.LogMgr) Watcher {
 }
 
 func (this *FsnotifyWatcher) Listen(rule *Rule, taskChan chan fsnotify.FileEvent) error {
-	// 当前仅支持监控单一目录
-	monitorDir := rule.Rules[0]
 
 	watcher, err := fsnotify.NewRecursiveWatcher()
 	if err != nil {
@@ -28,7 +26,7 @@ func (this *FsnotifyWatcher) Listen(rule *Rule, taskChan chan fsnotify.FileEvent
 	}
 	// defer watcher.Close()
 
-	go watcher.NotifyFsEvent(monitorDir, func(err error, e fsnotify.FileEvent) {
+	go watcher.NotifyFsEvent(rule.Path, func(err error, e fsnotify.FileEvent) {
 		if err != nil {
 			this.logger.Error("[NotifyFsEvent] %s", err)
 			return
@@ -40,7 +38,7 @@ func (this *FsnotifyWatcher) Listen(rule *Rule, taskChan chan fsnotify.FileEvent
 		}
 	})
 
-	err = watcher.RecursiveAdd(monitorDir)
+	err = watcher.RecursiveAdd(rule.Path, rule.Regexp)
 	if err != nil {
 		return err
 	}

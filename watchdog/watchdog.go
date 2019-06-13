@@ -8,7 +8,6 @@ import (
 	"github.com/cobolbaby/log-agent/watchdog/watcher"
 	"github.com/Jeffail/tunny"
 	"github.com/astaxie/beego/cache"
-	"github.com/bcicen/grmon/agent"
 	"github.com/djherbis/times"
 	"os"
 	"path/filepath"
@@ -28,24 +27,24 @@ const (
 )
 
 type Watchdog struct {
-	host          string
-	Logger        *log.LogMgr
-	watchStrategy map[string][]string
-	rules         map[string][]string
-	adapters      map[string][]handler.WatchdogHandler // 优先级队列
-	hook          *hook.AdvanceHook
-	cache         cache.Cache
+	host     string
+	Logger   *log.LogMgr
+	watchers map[string][]string
+	rules    map[string][2]string
+	adapters map[string][]handler.WatchdogHandler // 优先级队列
+	hook     *hook.AdvanceHook
+	cache    cache.Cache
 }
 
 func NewWatchdog() *Watchdog {
 	bm, _ := cache.NewCache("file", `{"CachePath":"./.cache","FileSuffix":".txt","DirectoryLevel":2, "EmbedExpiry":0}`)
 
 	return &Watchdog{
-		watchStrategy: make(map[string][]string),
-		rules:         make(map[string][]string),
-		adapters:      make(map[string][]handler.WatchdogHandler),
-		hook:          hook.NewAdvanceHook(),
-		cache:         bm,
+		watchers: make(map[string][]string),
+		rules:    make(map[string][2]string),
+		adapters: make(map[string][]handler.WatchdogHandler),
+		hook:     hook.NewAdvanceHook(),
+		cache:    bm,
 	}
 }
 
@@ -60,7 +59,7 @@ func (this *Watchdog) SetLogger(logger *log.LogMgr) *Watchdog {
 }
 
 func (this *Watchdog) SetWatchStrategy(biz string, strategy []string) *Watchdog {
-	this.watchStrategy[biz] = strategy
+	this.watchers[biz] = strategy
 	return this
 }
 
@@ -71,10 +70,8 @@ func (this *Watchdog) SetDefaultWatchStrategy(strategy ...string) *Watchdog {
 	return this
 }
 
-func (this *Watchdog) SetRules(biz string, rule string) *Watchdog {
-	// 将rules按照分隔符拆分，合并当前规则
-	ruleSlice := strings.Split(rule, ",")
-	this.rules[biz] = append(this.rules[biz], ruleSlice...)
+func (this *Watchdog) SetRules(biz string, path string, regexp string) *Watchdog {
+	this.rules[biz] = [2]string{path, regexp}
 	return this
 }
 
@@ -104,7 +101,7 @@ func (this *Watchdog) SetDefaultHandler(adapterNames ...string) *Watchdog {
 				this.AddHandler(biz.Name(), ConsoleAdapter)
 			case handler.Cassandra:
 			case handler.File:
-			case handler.RabbitMQ:
+			case handler.KAFKA:
 			default:
 			}
 		}
@@ -123,25 +120,26 @@ func (this *Watchdog) Run() {
 	this.SetDefaultHandler(handler.Console)
 
 	// 插件配置自检
-	if err := this.hook.Trigger("AutoCheck", this); err != nil {
+	if err := this.hook.Listen("AutoCheck", this); err != nil {
 		this.Logger.Fatal("AutoCheck hook return error, %s", err)
 	}
 	// 挂载插件初始化配置
-	if err := this.hook.Trigger("AutoInit", this); err != nil {
+	if err := this.hook.Listen("AutoInit", this); err != nil {
 		this.Logger.Fatal("AutoInit hook return error, %s", err)
 	}
 	// 挂载插件自定义配置
-	if err := this.hook.Trigger("Mount", this); err != nil {
+	if err := this.hook.Listen("Mount", this); err != nil {
 		this.Logger.Fatal("Mount hook return error, %s", err)
 	}
 
 	DelayQueueChan := make(chan fsnotify.FileEvent, DelayQueueChanCap)
 	TaskQueueChan := make(chan []fsnotify.FileEvent, TaskQueueChanCap)
 	// 支持同时配置多种业务监控策略
-	for biz, rules := range this.rules {
+	for b, r := range this.rules {
 		aRule := &watcher.Rule{
-			Biz:   biz,
-			Rules: rules,
+			Biz:    b,
+			Path:   r[0],
+			Regexp: r[1],
 		}
 		go this.Listen(aRule, DelayQueueChan)
 	}
@@ -152,9 +150,6 @@ func (this *Watchdog) Run() {
 
 	go this.Handle(TaskQueueChan)
 
-	// 启动程序监控
-	grmon.Start()
-	// TODO:推送心跳信息
 }
 
 // InSlice checks given string in string slice or not.
@@ -169,14 +164,14 @@ func InSlice(v string, sl []string) bool {
 
 func (this *Watchdog) Listen(rule *watcher.Rule, taskChan chan fsnotify.FileEvent) {
 	// 导入目录下原有文件，则调用fspolling
-	if InSlice(watcher.Fspolling, this.watchStrategy[rule.Biz]) {
+	if InSlice(watcher.Fspolling, this.watchers[rule.Biz]) {
 		err := watcher.NewFspollingWatcher(FsLoopScanInterval).SetLogger(this.Logger).Listen(rule, taskChan)
 		if err != nil {
 			this.Logger.Error("[FspollingWatcher] %s", err)
 		}
 	}
 	// 监听文件变化，则调用fsnotify
-	if InSlice(watcher.Fsnotify, this.watchStrategy[rule.Biz]) {
+	if InSlice(watcher.Fsnotify, this.watchers[rule.Biz]) {
 		err := watcher.NewFsnotifyWatcher().SetLogger(this.Logger).Listen(rule, taskChan)
 		if err != nil {
 			this.Logger.Error("[FsnotifyWatcher] %s", err)
@@ -247,12 +242,13 @@ func (this *Watchdog) getFileMeta(fileEvent fsnotify.FileEvent) (*handler.FileMe
 		return nil, err
 	}
 	if fileInfo.IsDir() {
-		// this.hook.Trigger("ProcessDirChange", this, fileInfo)
+		// this.hook.Listen("ProcessDirChange", this, fileInfo)
 		return nil, nil
 	}
 
 	// 文件目录，支持跨平台
 	dirName := filepath.Dir(fileEvent.Name)
+	// filepath.Clean 自动转化目录分隔符，如 "C:/dev/workspace" => "C:\\dev\\workspace"
 	rootDirName := filepath.Clean(fileEvent.MonitorDir)
 	var pathSeparator string
 	if os.IsPathSeparator('\\') {
@@ -317,22 +313,25 @@ func (this *Watchdog) fileProcessor(file fsnotify.FileEvent) {
 	}
 
 	// 支持Agent层级的清洗操作
-	this.hook.Trigger("CheckFile", this, fileMeta)
-	this.hook.Trigger("Transform", this, fileMeta)
-	// TODO:文件处理异常时需要将该文件事件传送至异常处理通道
+	if err := this.hook.Listen("CheckFile", this, fileMeta); err != nil {
+		this.Logger.Error("[fileProcessor] CheckFile hook return error: %s", err)
+		// 此类文件暂不做处理，稍后会由轮询程序检查重试
+		return
+	}
+	this.hook.Listen("Transform", this, fileMeta)
 
 	failure := false
 	// 考虑到失败回滚，采用串行更为便利
 	for _, Adapter := range this.adapters[fileMeta.LastOp.Biz] {
 		Adapter.SetLogger(this.Logger)
 		if err := Adapter.Handle(*fileMeta); err != nil {
-			this.Logger.Error("[fileProcessor] File Handle Error: %s", err)
+			this.Logger.Error("[fileProcessor] Adapter.Handle return error: %s", err)
 			failure = true
 			break
 		}
 	}
 	if failure {
-		this.Logger.Error("[fileProcessor] Need To Rollback File: %s", fileMeta.Filepath)
+		this.Logger.Error("[fileProcessor] Need to rollback file: %s", fileMeta.Filepath)
 		// TODO:文件处理异常时需要将该文件事件传送至异常处理通道
 		this.adapterRollback(fileMeta)
 		return

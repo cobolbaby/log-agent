@@ -5,6 +5,7 @@ import (
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
 	"github.com/cobolbaby/log-agent/watchdog/lib/log"
+	"github.com/bcicen/grmon/agent"
 	"github.com/kardianos/osext"
 	"path/filepath"
 )
@@ -29,4 +30,9 @@ func Run() {
 		SetLogger(logger).
 		LoadPlugins(plugins.Autoload()).
 		Run()
+
+	// 启动程序监控
+	grmon.Start()
+
+	// TODO:推送心跳信息
 }

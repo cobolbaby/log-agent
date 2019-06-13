@@ -38,7 +38,7 @@ func (this *AdvanceHook) Get(hook string) []AdvancePlugin {
 	return res
 }
 
-func (this *AdvanceHook) Trigger(hook string, params ...interface{}) error {
+func (this *AdvanceHook) Listen(hook string, params ...interface{}) error {
 	plugins := this.Get(hook)
 	if len(plugins) == 0 {
 		return nil
