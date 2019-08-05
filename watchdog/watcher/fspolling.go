@@ -3,10 +3,9 @@ package watcher
 import (
 	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
 	"github.com/cobolbaby/log-agent/watchdog/lib/log"
+	"errors"
 	"github.com/astaxie/beego/cache"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -26,51 +25,42 @@ func (this *FspollingWatcher) SetLogger(logger *log.LogMgr) Watcher {
 	return this
 }
 
-func (this *FspollingWatcher) Listen(rule *Rule, taskChan chan fsnotify.FileEvent) error {
-	monitorDir := rule.Path
-	if _, err := ioutil.ReadDir(monitorDir); err != nil {
+func (this *FspollingWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.FileEvent) error {
+	fi, err := os.Stat(rule.MonitPath)
+	if err != nil {
 		return err
 	}
-
-	bm, _ := cache.NewCache("file", `{"CachePath":"./.cache","FileSuffix":".txt","DirectoryLevel":2, "EmbedExpiry":0}`)
+	if !fi.IsDir() {
+		return errors.New("暂不支持监控单一文件")
+	}
 
 	go func() {
+		bm, _ := cache.NewCache("file", `{"CachePath":"./.cache","FileSuffix":".txt","DirectoryLevel":"2", "EmbedExpiry":"0"}`)
 		for {
-			this.logger.Info("[FspollingWatcher] %s LoopScan Start, Path: %s", rule.Biz, monitorDir)
+			this.logger.Info("[FspollingWatcher] %s LoopScan Start, Path: %s", rule.Biz, rule.MonitPath)
 			affectedNum := 0
-			walkDir(monitorDir, func(e fsnotify.FileEvent) {
-				// 检测文件的变更情况
-				if bm.IsExist(e.Name) && bm.Get(e.Name) == e.ModTime.String() {
-					return
+
+			fsnotify.WalkDir(rule, 1, func(e *fsnotify.FileEvent) error {
+				if e.IsDir {
+					return nil
 				}
+				// 检测文件是否变更
+				if bm.IsExist(e.Name) && bm.Get(e.Name) == e.ModTime.String() {
+					return nil
+				}
+				// 完善事件信息, 交给下游处理
 				e.Biz = rule.Biz
-				e.MonitorDir = monitorDir
+				e.RootPath = rule.RootPath
 				taskChan <- e
+
 				affectedNum++
+				return nil
 			})
+
 			this.logger.Info("[FspollingWatcher] %s LoopScan End, AffectedNum: %d", rule.Biz, affectedNum)
-			// 可以考虑加部分抖动
 			time.Sleep(this.interval)
 		}
 	}()
 
 	return nil
-}
-
-func walkDir(monitorDir string, cb func(e fsnotify.FileEvent)) {
-	dir, _ := os.Open(monitorDir)
-	defer dir.Close()
-	// unsorted file list
-	fis, _ := dir.Readdir(-1)
-	for _, fi := range fis {
-		if !fi.IsDir() {
-			cb(fsnotify.FileEvent{
-				ModTime: fi.ModTime(),
-				Op:      "LOAD",
-				Name:    filepath.Join(monitorDir, fi.Name()),
-			})
-			continue
-		}
-		walkDir(filepath.Join(monitorDir, fi.Name()), cb)
-	}
 }

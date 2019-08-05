@@ -1,6 +1,7 @@
 package fsnotify
 
 import (
+	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"os"
 	"path/filepath"
@@ -9,11 +10,22 @@ import (
 )
 
 type FileEvent struct {
-	Biz        string
-	ModTime    time.Time
-	Op         string
-	Name       string
-	MonitorDir string
+	Biz      string
+	RootPath string
+	Name     string
+	ModTime  time.Time
+	IsDir    bool
+	Op       string
+}
+
+type Rule struct {
+	Biz             string
+	RootPath        string
+	MonitPath       string
+	Patterns        string
+	Ignores         string
+	MaxNestingLevel uint
+	DebounceTime    time.Duration
 }
 
 type RecursiveWatcher struct {
@@ -28,7 +40,7 @@ func NewRecursiveWatcher() (*RecursiveWatcher, error) {
 	return &RecursiveWatcher{watcher}, nil
 }
 
-func (w *RecursiveWatcher) NotifyFsEvent(monitorDir string, cb func(err error, e FileEvent)) {
+func (w *RecursiveWatcher) NotifyFsEvent(rule *Rule, cb func(e *FileEvent, err error)) {
 	for {
 		select {
 		case event := <-w.Events:
@@ -37,97 +49,147 @@ func (w *RecursiveWatcher) NotifyFsEvent(monitorDir string, cb func(err error, e
 				// 目录--Create事件必须监控，同时考虑到后期会为新建目录添加相应的触发器，所以还需回调
 				// 文件--如果新建文件的父目录被监控了，Create事件就会被抛出，所以无需再次添加至监控列表
 				// 如果将文件也添加至监控列表，则内存中需要维护一个大的map，出现内存持续飙升的问题
+				if !CheckIfMatch(event.Name, rule) || CheckIfIgnore(event.Name, rule) {
+					fmt.Println("Ignore fs event:", event.Op, event.Name)
+					continue
+				}
 				fi, err := os.Stat(event.Name)
 				if err != nil {
-					cb(err, FileEvent{})
+					cb(nil, err)
 					continue
 				}
 				if fi.IsDir() {
-					w.RecursiveAdd(event.Name, ".*")
+					w.RecursiveAdd(&Rule{
+						MonitPath: event.Name,
+						Patterns:  rule.Patterns,
+						Ignores:   rule.Ignores,
+					})
 				}
-				cb(nil, FileEvent{
-					Op:         "Create",
-					Name:       event.Name,
-					MonitorDir: monitorDir,
-				})
+				cb(&FileEvent{
+					Op:   "CREATE",
+					Name: event.Name,
+				}, nil)
 				continue
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				// 目录--Write事件因文件创建/删除引起，所以无需再次添加监控列表，也无需回调
 				// e.g. Windows下生成一个新文件会触发两个事件: 文件创建事件和目录写入事件
+				// TODO:上述说法在直接拷贝目录的业务场景下不成立，后续还得继续支持该业务场景
 				// 文件--Write事件因文件内容修改引起，所以无需再次添加监控列表
-				fi, err := os.Stat(event.Name)
-				if err != nil {
-					cb(err, FileEvent{})
+				if !CheckIfMatch(event.Name, rule) || CheckIfIgnore(event.Name, rule) {
+					fmt.Println("Ignore fs event:", event.Op, event.Name)
 					continue
 				}
-				if fi.IsDir() {
-					continue
-				}
-				cb(nil, FileEvent{
-					Op:         "Write",
-					Name:       event.Name,
-					MonitorDir: monitorDir,
-				})
+				cb(&FileEvent{
+					Op:   "WRITE",
+					Name: event.Name,
+				}, nil)
 				continue
 			}
 			if event.Op&fsnotify.Remove == fsnotify.Remove {
 				// 目录--Remove事件因目录删除引起，如果将其移出监控列表，可优化内存使用，但当前业务不涉及移除目录的操作
 				// 文件--Remove事件因文件删除引起，而监控列表中仅保存了目录，所以没有什么好移除的
+				if !CheckIfMatch(event.Name, rule) || CheckIfIgnore(event.Name, rule) {
+					fmt.Println("Ignore fs event:", event.Op, event.Name)
+					continue
+				}
 				// w.Remove(event.Name)
-				cb(nil, FileEvent{
-					Op:         "Remove",
-					Name:       event.Name,
-					MonitorDir: monitorDir,
-				})
+				cb(&FileEvent{
+					Op:   "REMOVE",
+					Name: event.Name,
+				}, nil)
 				continue
 			}
 			if event.Op&fsnotify.Rename == fsnotify.Rename {
 				// 目录--Rename事件与目录删除等同，如果将其移出监控列表，可优化内存使用，但当前业务不涉及移除目录的操作
 				// 文件--Rename事件与文件删除等同，而监控列表中仅保存了目录，所以没有什么好移除的
+				if !CheckIfMatch(event.Name, rule) || CheckIfIgnore(event.Name, rule) {
+					fmt.Println("Ignore fs event:", event.Op, event.Name)
+					continue
+				}
 				// w.Remove(event.Name)
-				cb(nil, FileEvent{
-					Op:         "Rename",
-					Name:       event.Name,
-					MonitorDir: monitorDir,
-				})
+				cb(&FileEvent{
+					Op:   "RENAME",
+					Name: event.Name,
+				}, nil)
 				continue
 			}
 		case err := <-w.Errors:
-			cb(err, FileEvent{})
+			// fmt.Printf("w.Errors: %s", err)
+			cb(nil, err)
 		}
 	}
 }
 
-func (w *RecursiveWatcher) RecursiveAdd(name string, exp string) error {
-	fi, err := os.Stat(name)
+func (w *RecursiveWatcher) RecursiveAdd(rule *Rule) error {
+	fi, err := os.Stat(rule.MonitPath)
 	if err != nil {
 		return err
 	}
+	fmt.Println("Add Watch:", rule.MonitPath)
+	w.Add(rule.MonitPath)
 	if !fi.IsDir() {
-		if err := w.Add(name); err != nil {
-			return err
-		}
 		return nil
 	}
-	var re *regexp.Regexp
-	if exp != ".*" && exp != "" {
-		re = regexp.MustCompile(exp)
-	}
-	return filepath.Walk(name, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
+	return WalkDir(rule, 1, func(e *FileEvent) error {
+		// 监控目录就能实时监听目录下的文件了, 所以没必要下那么多监听事件
+		if !e.IsDir {
 			return nil
 		}
-		// 非匹配项不实时监控
-		if re != nil && !re.MatchString(filepath.ToSlash(path)) {
-			// 匹配规则中分隔符写法仅支持Linux风格
-			return nil
-		}
-		return w.Add(path)
+		fmt.Println("Add Watch:", e.Name)
+		return w.Add(e.Name)
 	})
+}
+
+// func WalkDir(dir string, pattern string, fn func(e FileEvent) error) error {
+func WalkDir(rule *Rule, level uint, fn func(e *FileEvent) error) error {
+	// ReadDir reads the directory named by dirname and returns a list of directory entries sorted by filename.
+	// entries, err := ioutil.ReadDir(dir)
+	// Ref: https://flaviocopes.com/go-list-files/
+	f, err := os.Open(rule.MonitPath)
+	if err != nil {
+		return err
+	}
+	entries, err := f.Readdir(-1)
+	f.Close()
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		subdir := filepath.Join(rule.MonitPath, entry.Name())
+		// 非匹配项就不再遍历
+		if !CheckIfMatch(subdir, rule) || CheckIfIgnore(subdir, rule) {
+			continue
+		}
+		fn(&FileEvent{
+			Name:    subdir,
+			ModTime: entry.ModTime(),
+			IsDir:   entry.IsDir(),
+			Op:      "LOAD",
+		})
+		// 支持设定目录监控的深度
+		if entry.IsDir() && (rule.MaxNestingLevel == 0 || (rule.MaxNestingLevel != 0 && level < rule.MaxNestingLevel)) {
+			rule.MonitPath = subdir
+			WalkDir(rule, level+1, fn)
+		}
+	}
+	return nil
+}
+
+func CheckIfMatch(path string, rule *Rule) bool {
+	if rule.Patterns == ".*" || rule.Patterns == "" {
+		return true
+	}
+	// 匹配规则中分隔符写法仅支持Linux风格
+	return rule.Patterns != "" && regexp.MustCompile(rule.Patterns).MatchString(filepath.ToSlash(path))
+}
+
+func CheckIfIgnore(path string, rule *Rule) bool {
+	if rule.Ignores == ".*" {
+		return true
+	}
+	// 匹配规则中分隔符写法仅支持Linux风格
+	return rule.Ignores != "" && regexp.MustCompile(rule.Ignores).MatchString(filepath.ToSlash(path))
 }
 
 /*
@@ -161,25 +223,3 @@ func filteredSearchOfDirectoryTree(re *regexp.Regexp, dir string) error {
 	return nil
 }
 */
-
-func (w *RecursiveWatcher) RecursiveRemove(name string) error {
-	fi, err := os.Stat(name)
-	if err != nil {
-		return err
-	}
-	if !fi.IsDir() {
-		if err := w.Remove(name); err != nil {
-			return err
-		}
-		return nil
-	}
-	return filepath.Walk(name, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if err := w.Remove(path); err != nil {
-			return err
-		}
-		return nil
-	})
-}

@@ -5,12 +5,13 @@ import (
 	"crypto/md5"
 	"github.com/cobolbaby/log-agent/watchdog/lib/compress"
 	"github.com/cobolbaby/log-agent/watchdog/lib/log"
-	"encoding/hex"
-	// "encoding/json"
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/Shopify/sarama"
-	"github.com/linkedin/goavro/v2"
+	// "github.com/dangkaka/go-kafka-avro"
+	// "github.com/linkedin/goavro"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -23,65 +24,69 @@ var (
 )
 
 const (
-	// name字段中不能包含字符"-",不然会报：Input schema is an invalid Avro schema
+	// Avro Schema需要谨防以下错误:
+	// 		name字段中不能包含字符"-",不然会报：Input schema is an invalid Avro schema
+	// Json Schema需要谨防以下错误:
+	// 		Caused by: org.apache.kafka.connect.errors.DataException: Unknown schema type: record -- avro schema支持record，但json schema此处需要配置为struct
+	// 		Caused by: org.apache.kafka.connect.errors.DataException: Struct schema's field name not specified properly -- avro schema中为name，而json schema中用field定义
+	// 		Caused by: org.apache.kafka.connect.errors.DataException: Unknown schema type: long -- avro schema中长整形用long，但json schema中为int64
+	//		json.Unmarshal error: invalid character '}' looking for beginning of object key string -- json格式问题，'}'前有多余的','
 	recordSchemaJSON = `
 	{
-		"type": "record",
+		"type": "struct",
 		"name": "dcagent_value",
 		"fields": [
 			{
-				"name": "file_date",
+				"field": "file_date",
 				"type": "string"
 			},
 			{
-				"name": "file_time",
-				"type": "long"
+				"field": "file_time",
+				"type": "int64"
 			},
 			{
-				"name": "folder",
-				"type": "string",
-				"default": ""
-			},
-			{
-				"name": "pack",
-				"type": "string",
-				"default": ""
-			},
-			{
-				"name": "name",
+				"field": "folder",
 				"type": "string"
 			},
 			{
-				"name": "size",
-				"type": "long"
-			},
-			{
-				"name": "modify_time",
-				"type": "long"
-			},
-			{
-				"name": "content",
+				"field": "pack",
 				"type": "string"
 			},
 			{
-				"name": "compress",
+				"field": "name",
+				"type": "string"
+			},
+			{
+				"field": "size",
+				"type": "int64"
+			},
+			{
+				"field": "modify_time",
+				"type": "int64"
+			},
+			{
+				"field": "content",
+				"type": "string"
+			},
+			{
+				"field": "compress",
 				"type": "boolean"
 			},
 			{
-				"name": "compress_size",
-				"type": "long"
+				"field": "compress_size",
+				"type": "int64"
 			},
 			{
-				"name": "checksum",
+				"field": "checksum",
 				"type": "string"
 			},
 			{
-				"name": "host",
+				"field": "host",
 				"type": "string"
 			},
 			{
-				"name": "folder_time",
-				"type": "long"
+				"field": "folder_time",
+				"type": "int64"
 			}
 		]
 	}
@@ -94,18 +99,19 @@ type KafkaAdapter struct {
 	logger   *log.LogMgr
 	Priority uint8
 	producer sarama.SyncProducer
-	codec    *goavro.Codec
+	// schemaRegistryClient *kafka.CachedSchemaRegistryClient
+	// codec                *goavro.Codec
 }
 
 type KafkaAdapterCfg struct {
-	Brokers  string
-	Topic    string
-	SchemaID uint
+	Brokers        string
+	Topic          string
+	SchemaRegistry string
 }
 
 func NewKafkaAdapter(Cfg *KafkaAdapterCfg) (WatchdogHandler, error) {
 	self := &KafkaAdapter{
-		Name:   "Cassandra",
+		Name:   "Kafka",
 		Config: Cfg,
 	}
 
@@ -142,11 +148,13 @@ func (this *KafkaAdapter) newSyncProducer() error {
 	KafkaInstance = client
 	this.producer = client
 
-	codec, err := goavro.NewCodec(recordSchemaJSON)
-	if err != nil {
-		return err
-	}
-	this.codec = codec
+	// codec, err := goavro.NewCodec(recordSchemaJSON)
+	// if err != nil {
+	// 	return err
+	// }
+	// schemaRegistryClient := kafka.NewCachedSchemaRegistryClientWithRetries(strings.Split(this.Config.SchemaRegistry, ","), 3)
+	// this.codec = codec
+	// this.schemaRegistryClient = schemaRegistryClient
 
 	return nil
 }
@@ -312,79 +320,90 @@ func (this *KafkaAdapter) Insert(fi *FileMeta) error {
 	// file_date -- 当前时区时间-日期，该字段仅为方便业务查询
 	// file_time -- 当前时区时间-日期+时间
 
-	// 针对空文件content保留为空
-	var ctx string
-	if fi.Size > 0 {
-		ctx = "0x" + hex.EncodeToString(fi.Content)
-	} else {
-		ctx = string(fi.Content)
-	}
+	// fix: Error decoding JSON value for content: Value '' is not a valid blob representation: String representation of blob is missing 0x prefix
+	// 空文件在Cassandra中保存为"0x"
+	ctx := "0x" + hex.EncodeToString(fi.Content)
 
-	// msgKey := &MsgKeyEncoder{
-	// 	Path: fi.Filepath,
-	// }
 	// Ref: http://cassandra.apache.org/doc/latest/cql/json.html#json-encoding-of-cassandra-data-types
 	// 传时间戳，不传Datetime了
-	// msgVal := &MsgValueEncoder{
-	// 	CreateDate: fi.CreateTime.Format("2006-01-02"),
-	// 	// CreateTime:   fi.CreateTime.UnixNano().Format("2006-01-02T15:04:05.000-0700"),
-	// 	CreateTime:   fi.CreateTime.UnixNano() / 1000000,
-	// 	SubDir:       fi.SubDir,
-	// 	Pack:         fi.Pack,
-	// 	Filename:     fi.Filename,
-	// 	Size:         fi.Size,
-	// 	ModifyTime:   fi.ModifyTime.UnixNano() / 1000000,
-	// 	Compress:     fi.Compress,
-	// 	CompressSize: fi.CompressSize,
-	// 	Checksum:     fi.Checksum,
-	// 	Host:         fi.Host,
-	// 	FolderTime:   fi.FolderTime.UnixNano() / 1000000,
-	// 	Content:      ctx,
+	payload := &LogfileEncoder{
+		CreateDate: fi.CreateTime.Format("2006-01-02"),
+		// CreateTime:   fi.CreateTime.UnixNano().Format("2006-01-02T15:04:05.000-0700"),
+		CreateTime:   fi.CreateTime.UnixNano() / 1000000,
+		SubDir:       fi.SubDir,
+		Pack:         fi.Pack,
+		Filename:     fi.Filename,
+		Size:         fi.Size,
+		ModifyTime:   fi.ModifyTime.UnixNano() / 1000000,
+		Compress:     fi.Compress,
+		CompressSize: fi.CompressSize,
+		Checksum:     fi.Checksum,
+		Host:         fi.Host,
+		FolderTime:   fi.FolderTime.UnixNano() / 1000000,
+		Content:      ctx,
+	}
+
+	// 添加Schema标注信息
+	schema := make(map[string]interface{})
+	err := json.Unmarshal([]byte(recordSchemaJSON), &schema)
+	if err != nil {
+		this.logger.Error("[KafkaAdapter] recordSchemaJSON json.Unmarshal error, %s", err)
+		return err
+	}
+
+	msgVal := &MsgValueEncoder{
+		Schema:  schema,
+		Payload: payload,
+	}
+
+	// fix: 矫正消息唯一性标示，考虑是压缩包的场景
+	msgKey := fi.SubDir + "/"
+	if fi.Pack == "" {
+		msgKey += fi.Filename
+	} else {
+		msgKey += fi.Pack + "/" + fi.Filename
+	}
+
+	msg := &sarama.ProducerMessage{
+		Topic: this.Config.Topic,
+		Key:   sarama.StringEncoder(msgKey),
+		Value: msgVal,
+	}
+
+	// native := map[string]interface{}{
+	// 	"file_date":     fi.CreateTime.Format("2006-01-02"),
+	// 	"file_time":     fi.CreateTime.UnixNano() / 1000000,
+	// 	"folder":        fi.SubDir,
+	// 	"pack":          fi.Pack,
+	// 	"name":          fi.Filename,
+	// 	"size":          fi.Size,
+	// 	"modify_time":   fi.ModifyTime.UnixNano() / 1000000,
+	// 	"compress":      fi.Compress,
+	// 	"compress_size": fi.CompressSize,
+	// 	"checksum":      fi.Checksum,
+	// 	"host":          fi.Host,
+	// 	"folder_time":   fi.FolderTime.UnixNano() / 1000000,
+	// 	"content":       ctx,
+	// }
+	// // Convert native Go form to binary Avro data
+	// binaryMsg, err := this.codec.BinaryFromNative(nil, native)
+	// if err != nil {
+	// 	return err
+	// }
+	// schemaId, err := this.schemaRegistryClient.CreateSubject(this.Config.Topic+"-value", this.codec)
+	// if err != nil {
+	// 	return err
+	// }
+	// msgVal := &AvroEncoder{
+	// 	SchemaID: schemaId,
+	// 	Content:  binaryMsg,
 	// }
 	// msg := &sarama.ProducerMessage{
 	// 	Topic:     this.Config.Topic,
-	// 	Key:       msgKey,
+	// 	Key:       sarama.StringEncoder(fi.Filepath),
 	// 	Value:     msgVal,
 	// 	Timestamp: time.Now(),
 	// }
-	native := map[string]interface{}{
-		"file_date":     fi.CreateTime.Format("2006-01-02"),
-		"file_time":     fi.CreateTime.UnixNano() / 1000000,
-		"folder":        fi.SubDir,
-		"pack":          fi.Pack,
-		"name":          fi.Filename,
-		"size":          fi.Size,
-		"modify_time":   fi.ModifyTime.UnixNano() / 1000000,
-		"compress":      fi.Compress,
-		"compress_size": fi.CompressSize,
-		"checksum":      fi.Checksum,
-		"host":          fi.Host,
-		"folder_time":   fi.FolderTime.UnixNano() / 1000000,
-		"content":       ctx,
-	}
-	// Convert native Go form to binary Avro data
-	msgVal, err := this.codec.BinaryFromNative(nil, native)
-	if err != nil {
-		fmt.Println(err)
-	}
-	// 此处无数坑，因为Confluent schema registry正对Avro序列化规则有特殊要求，不光需要序列化具体的内容，还要附加上Schema ID以及Magic Byte
-	// Ref: https://docs.confluent.io/current/schema-registry/serializer-formatter.html#wire-format
-	var binaryMsg []byte
-	// Confluent serialization format version number; currently always 0.
-	binaryMsg = append(binaryMsg, byte(0))
-	// 4-byte schema ID as returned by Schema Registry
-	binarySchemaId := make([]byte, 4)
-	binary.BigEndian.PutUint32(binarySchemaId, uint32(this.Config.SchemaID))
-	binaryMsg = append(binaryMsg, binarySchemaId...)
-	// Avro serialized data in Avro's binary encoding
-	binaryMsg = append(binaryMsg, msgVal...)
-
-	msg := &sarama.ProducerMessage{
-		Topic:     this.Config.Topic,
-		Key:       sarama.StringEncoder(fi.Filepath),
-		Value:     sarama.ByteEncoder(binaryMsg),
-		Timestamp: time.Now(),
-	}
 	if _, _, err := this.producer.SendMessage(msg); err != nil {
 		return err
 	}
@@ -396,41 +415,59 @@ func (this *KafkaAdapter) Rollback(fi FileMeta) error {
 	return nil
 }
 
-// type MsgKeyEncoder struct {
-// 	Path string `json:"path"`
-// }
+type MsgValueEncoder struct {
+	Schema  map[string]interface{} `json:"schema"`
+	Payload *LogfileEncoder        `json:"payload"`
+}
 
-// func (k *MsgKeyEncoder) Encode() ([]byte, error) {
-// 	return json.Marshal(k)
-// }
+// LogfileEncoder Need to implement sarama.Encoder interface
+type LogfileEncoder struct {
+	CreateDate   string `json:"file_date"`
+	CreateTime   int64  `json:"file_time"`
+	SubDir       string `json:"folder"`
+	Pack         string `json:"pack"`
+	Filename     string `json:"name"`
+	Size         int64  `json:"size"`
+	ModifyTime   int64  `json:"modify_time"`
+	Content      string `json:"content"`
+	Compress     bool   `json:"compress"`
+	CompressSize int64  `json:"compress_size"`
+	Checksum     string `json:"checksum"`
+	Host         string `json:"host"`
+	FolderTime   int64  `json:"folder_time"`
+}
 
-// func (k *MsgKeyEncoder) Length() int {
-// 	encoded, _ := json.Marshal(k)
-// 	return len(encoded)
-// }
+func (v *MsgValueEncoder) Encode() ([]byte, error) {
+	return json.Marshal(v)
+}
 
-// // MsgValueEncoder Need to implement sarama.Encoder interface
-// type MsgValueEncoder struct {
-// 	CreateDate   string `json:"file_date"`
-// 	CreateTime   int64  `json:"file_time"`
-// 	SubDir       string `json:"folder"`
-// 	Pack         string `json:"pack"`
-// 	Filename     string `json:"name"`
-// 	Size         int64  `json:"size"`
-// 	ModifyTime   int64  `json:"modify_time"`
-// 	Content      string `json:"content"`
-// 	Compress     bool   `json:"compress"`
-// 	CompressSize int64  `json:"compress_size"`
-// 	Checksum     string `json:"checksum"`
-// 	Host         string `json:"host"`
-// 	FolderTime   int64  `json:"folder_time"`
-// }
+func (v *MsgValueEncoder) Length() int {
+	encoded, _ := json.Marshal(v)
+	return len(encoded)
+}
 
-// func (v *MsgValueEncoder) Encode() ([]byte, error) {
-// 	return json.Marshal(v)
-// }
+// AvroEncoder encodes schemaId and Avro message.
+type AvroEncoder struct {
+	SchemaID int
+	Content  []byte
+}
 
-// func (v *MsgValueEncoder) Length() int {
-// 	encoded, _ := json.Marshal(v)
-// 	return len(encoded)
-// }
+// 此处无数坑，因为Confluent schema registry正对Avro序列化规则有特殊要求，不光需要序列化具体的内容，还要附加上Schema ID以及Magic Byte
+// Ref: https://docs.confluent.io/current/schema-registry/serializer-formatter.html#wire-format
+func (a *AvroEncoder) Encode() ([]byte, error) {
+	var binaryMsg []byte
+	// Confluent serialization format version number; currently always 0.
+	binaryMsg = append(binaryMsg, byte(0))
+	// 4-byte schema ID as returned by Schema Registry
+	binarySchemaId := make([]byte, 4)
+	binary.BigEndian.PutUint32(binarySchemaId, uint32(a.SchemaID))
+	binaryMsg = append(binaryMsg, binarySchemaId...)
+	// Avro serialized data in Avro's binary encoding
+	binaryMsg = append(binaryMsg, a.Content...)
+	return binaryMsg, nil
+}
+
+// Length of schemaId and Content.
+func (a *AvroEncoder) Length() int {
+	return 5 + len(a.Content)
+}

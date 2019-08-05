@@ -12,10 +12,10 @@ LDFLAGS=-ldflags "-w -X main.GIT_COMMIT=${GIT_COMMIT} -X 'main.BUILD_TIME=${BUIL
 build:
 	# go clean -modcache
 	GO111MODULE=on go mod vendor
-	# GOOS=windows GOARCH=386 go build ${LDFLAGS} -o $(NAME)-x86.exe main.go
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ${LDFLAGS} -o $(NAME)-amd64.exe main.go
-	# /opt/programs/upx/upx -f -9 $(NAME)-x86.exe
-	/opt/programs/upx/upx -f -9 $(NAME)-amd64.exe
+	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build ${LDFLAGS} -o $(NAME)_2.0.1_windows_x86.exe main.go
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ${LDFLAGS} -o $(NAME)_2.0.1_windows_amd64.exe main.go
+	/opt/programs/upx/upx -f -9 $(NAME)_2.0.1_windows_x86.exe
+	/opt/programs/upx/upx -f -9 $(NAME)_2.0.1_windows_amd64.exe
 
 install:
 	make build

@@ -4,13 +4,17 @@ import (
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
 	"github.com/cobolbaby/log-agent/watchdog/handler"
+	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
 	"github.com/cobolbaby/log-agent/watchdog/lib/hook"
+	"github.com/cobolbaby/log-agent/watchdog/watcher"
 	"errors"
 	"fmt"
 	"github.com/go-ini/ini"
 	"log"
+	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 )
 
 var (
@@ -27,6 +31,7 @@ type Plugin interface {
 	Mount(*watchdog.Watchdog) error
 	CheckFile(*watchdog.Watchdog, *handler.FileMeta) error
 	Transform(*watchdog.Watchdog, *handler.FileMeta) error
+	Handle404Error(watchDog *watchdog.Watchdog, file *handler.FileMeta, fevent *fsnotify.FileEvent) error
 }
 
 type DefaultPlugin struct {
@@ -106,7 +111,21 @@ func (this *DefaultPlugin) Transform(watchDog *watchdog.Watchdog, file *handler.
 func (this *DefaultPlugin) AutoInit(watchDog *watchdog.Watchdog) error {
 	watchDog.Logger.Info(this.Name() + " AutoInit")
 
-	watchDog.SetRules(this.Name(), this.Config.Key("watch").Value(), this.Config.Key("regexp").Value())
+	watchDog.SetRules(this.Name(), &fsnotify.Rule{
+		Biz:             this.Name(),
+		RootPath:        this.Config.Key("watch").Value(),
+		MonitPath:       filepath.Join(this.Config.Key("watch").Value(), this.Config.Key("subdir").Value()),
+		Patterns:        this.Config.Key("patterns").Value(),
+		Ignores:         this.Config.Key("ignores").Value(),
+		MaxNestingLevel: this.Config.Key("max_nesting_level").MustUint(0),
+		DebounceTime:    time.Duration(this.Config.Key("debounce").MustUint(3000)) * time.Millisecond, // 文件系统事件延迟处理时间. 每种业务的处理机制是不一样的, 可以设置一个默认的, 然后也可以针对单一业务做配置覆盖.
+	})
+
+	watchStrategy := []string{watcher.FS_NOTIFY}
+	if !this.Config.HasKey("historical_data_import") || (this.Config.HasKey("historical_data_import") && this.Config.Key("historical_data_import").MustBool() == true) {
+		watchStrategy = append(watchStrategy, watcher.FS_POLL)
+	}
+	watchDog.SetWatchStrategy(this.Name(), watchStrategy)
 
 	// 历史版本直接上传Cassandra
 	// CassandraAdapter, err := handler.NewCassandraAdapter(&handler.CassandraAdapterCfg{
@@ -121,9 +140,9 @@ func (this *DefaultPlugin) AutoInit(watchDog *watchdog.Watchdog) error {
 
 	// 新版本先上传至Kafka
 	KafkaAdapter, err := handler.NewKafkaAdapter(&handler.KafkaAdapterCfg{
-		Brokers:  this.Config.Key("kafka_brokers").Value(),
-		Topic:    this.Config.Key("kafka_topic").Value(),
-		SchemaID: this.Config.Key("kafka_schema_id").MustUint(),
+		Brokers:        this.Config.Key("kafka_brokers").Value(),
+		Topic:          this.Config.Key("kafka_topic").Value(),
+		SchemaRegistry: this.Config.Key("kafka_schema_registry").Value(),
 	})
 	if err != nil {
 		return err
@@ -145,6 +164,13 @@ func (this *DefaultPlugin) AutoInit(watchDog *watchdog.Watchdog) error {
 
 // 添加业务特殊处理(同步目录)
 func (this *DefaultPlugin) Mount(watchDog *watchdog.Watchdog) error {
+
+	// 扩展代码...
+
+	return nil
+}
+
+func (this *DefaultPlugin) Handle404Error(watchDog *watchdog.Watchdog, file *handler.FileMeta, fevent *fsnotify.FileEvent) error {
 
 	// 扩展代码...
 
@@ -177,6 +203,7 @@ func Autoload() []hook.AdvancePlugin {
 		// v.NewKey("cassandra_hosts", cfg.Section("CASSANDRA").Key("hosts").Value())
 		// 新版本先上传至Kafka
 		v.NewKey("kafka_brokers", cfg.Section("KAFKA").Key("brokers").Value())
+		v.NewKey("kafka_schema_registry", cfg.Section("KAFKA").Key("schema_registry").Value())
 		plugin.SetAttr("BizName", v.Name()).SetAttr("Config", v)
 		// 判断插件是否处于激活状态
 		if !plugin.IsActive() {

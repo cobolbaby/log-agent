@@ -23,25 +23,24 @@ const (
 	CacheQueueMaxSize  = 100              // 一次性处理的最大任务数
 	TaskQueueChanCap   = 1                // 待处理任务通道长度
 	FsLoopScanInterval = 30 * time.Minute // 文件系统轮询时间间隔
-	DebounceTime       = 3 * time.Second  // 文件系统事件延迟处理时间
 )
 
 type Watchdog struct {
 	host     string
 	Logger   *log.LogMgr
 	watchers map[string][]string
-	rules    map[string][2]string
+	rules    map[string]*fsnotify.Rule
 	adapters map[string][]handler.WatchdogHandler // 优先级队列
 	hook     *hook.AdvanceHook
 	cache    cache.Cache
 }
 
 func NewWatchdog() *Watchdog {
-	bm, _ := cache.NewCache("file", `{"CachePath":"./.cache","FileSuffix":".txt","DirectoryLevel":2, "EmbedExpiry":0}`)
+	bm, _ := cache.NewCache("file", `{"CachePath":"./.cache","FileSuffix":".txt","DirectoryLevel":"2", "EmbedExpiry":"0"}`)
 
 	return &Watchdog{
 		watchers: make(map[string][]string),
-		rules:    make(map[string][2]string),
+		rules:    make(map[string]*fsnotify.Rule),
 		adapters: make(map[string][]handler.WatchdogHandler),
 		hook:     hook.NewAdvanceHook(),
 		cache:    bm,
@@ -70,8 +69,8 @@ func (this *Watchdog) SetDefaultWatchStrategy(strategy ...string) *Watchdog {
 	return this
 }
 
-func (this *Watchdog) SetRules(biz string, path string, regexp string) *Watchdog {
-	this.rules[biz] = [2]string{path, regexp}
+func (this *Watchdog) SetRules(biz string, rule *fsnotify.Rule) *Watchdog {
+	this.rules[biz] = rule
 	return this
 }
 
@@ -116,40 +115,35 @@ func (this *Watchdog) LoadPlugins(plugins []hook.AdvancePlugin) *Watchdog {
 
 func (this *Watchdog) Run() {
 	// 设置默认选项
-	this.SetDefaultWatchStrategy(watcher.Fsnotify, watcher.Fspolling)
+	// this.SetDefaultWatchStrategy(watcher.FS_NOTIFY, watcher.FS_POLL)
 	this.SetDefaultHandler(handler.Console)
-
 	// 插件配置自检
 	if err := this.hook.Listen("AutoCheck", this); err != nil {
-		this.Logger.Fatal("AutoCheck hook return error, %s", err)
+		this.Logger.Fatal("AutoCheck hook throw exception: %s", err)
 	}
 	// 挂载插件初始化配置
 	if err := this.hook.Listen("AutoInit", this); err != nil {
-		this.Logger.Fatal("AutoInit hook return error, %s", err)
+		this.Logger.Fatal("AutoInit hook throw exception: %s", err)
 	}
 	// 挂载插件自定义配置
 	if err := this.hook.Listen("Mount", this); err != nil {
-		this.Logger.Fatal("Mount hook return error, %s", err)
+		this.Logger.Fatal("Mount hook throw exception: %s", err)
 	}
-
-	DelayQueueChan := make(chan fsnotify.FileEvent, DelayQueueChanCap)
-	TaskQueueChan := make(chan []fsnotify.FileEvent, TaskQueueChanCap)
-	// 支持同时配置多种业务监控策略
-	for b, r := range this.rules {
-		aRule := &watcher.Rule{
-			Biz:    b,
-			Path:   r[0],
-			Regexp: r[1],
-		}
+	// 同时监控多种业务，并且针对不同的业务可配置不同的延迟处理时间
+	TaskQueueChan := make(chan []*fsnotify.FileEvent, TaskQueueChanCap)
+	DelayQueueChan := make(chan *fsnotify.FileEvent, DelayQueueChanCap)
+	for _, aRule := range this.rules {
 		go this.Listen(aRule, DelayQueueChan)
+		// 通过延长Debounce时间来降低与其他进程产生竞争的概率
+		go this.TransferDebounce(aRule.DebounceTime, DelayQueueChan, TaskQueueChan)
+		// if aRule.DebounceTime > 0 {
+		// 	go this.TransferDebounce(aRule.DebounceTime, DelayQueueChan, TaskQueueChan)
+		// } else {
+		// 	go this.Transfer(DelayQueueChan, TaskQueueChan)
+		// }
 	}
-
-	// bug: The process cannot access the file because it is being used by another process.
-	// 通过延长Debounce时间来降低与其他进程产生竞争的概率
-	go this.TransferDebounce(DelayQueueChan, TaskQueueChan, DebounceTime)
-
+	// 采用协程池处理文件事件
 	go this.Handle(TaskQueueChan)
-
 }
 
 // InSlice checks given string in string slice or not.
@@ -162,27 +156,27 @@ func InSlice(v string, sl []string) bool {
 	return false
 }
 
-func (this *Watchdog) Listen(rule *watcher.Rule, taskChan chan fsnotify.FileEvent) {
+func (this *Watchdog) Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.FileEvent) {
 	// 导入目录下原有文件，则调用fspolling
-	if InSlice(watcher.Fspolling, this.watchers[rule.Biz]) {
+	if InSlice(watcher.FS_POLL, this.watchers[rule.Biz]) {
 		err := watcher.NewFspollingWatcher(FsLoopScanInterval).SetLogger(this.Logger).Listen(rule, taskChan)
 		if err != nil {
-			this.Logger.Error("[FspollingWatcher] %s", err)
+			this.Logger.Error("[FspollingWatcher.Listen] %s", err)
 		}
 	}
 	// 监听文件变化，则调用fsnotify
-	if InSlice(watcher.Fsnotify, this.watchers[rule.Biz]) {
+	if InSlice(watcher.FS_NOTIFY, this.watchers[rule.Biz]) {
 		err := watcher.NewFsnotifyWatcher().SetLogger(this.Logger).Listen(rule, taskChan)
 		if err != nil {
-			this.Logger.Error("[FsnotifyWatcher] %s", err)
+			this.Logger.Error("[FsnotifyWatcher.Listen] %s", err)
 		}
 	}
 }
 
-func (this *Watchdog) TransferDebounce(srcChan chan fsnotify.FileEvent, distChan chan []fsnotify.FileEvent, delay time.Duration) {
+func (this *Watchdog) TransferDebounce(delay time.Duration, srcChan chan *fsnotify.FileEvent, distChan chan []*fsnotify.FileEvent) {
 	timer := time.NewTicker(delay)
-	var cacheQ []fsnotify.FileEvent
-	var e fsnotify.FileEvent
+	var cacheQ []*fsnotify.FileEvent
+	var e *fsnotify.FileEvent
 
 	// 实现带优先级的Channel
 	for {
@@ -202,54 +196,65 @@ func (this *Watchdog) TransferDebounce(srcChan chan fsnotify.FileEvent, distChan
 	}
 }
 
-func (this *Watchdog) Transfer(srcChan chan fsnotify.FileEvent, distChan chan []fsnotify.FileEvent) {
-	var e fsnotify.FileEvent
+func (this *Watchdog) Transfer(srcChan chan *fsnotify.FileEvent, distChan chan []*fsnotify.FileEvent) {
+	var e *fsnotify.FileEvent
 	for {
 		select {
 		case e = <-srcChan:
-			distChan <- []fsnotify.FileEvent{e}
+			distChan <- []*fsnotify.FileEvent{e}
 		}
 	}
 }
 
-func (this *Watchdog) Handle(taskChan chan []fsnotify.FileEvent) {
-	var e []fsnotify.FileEvent
+func (this *Watchdog) Handle(taskChan chan []*fsnotify.FileEvent) {
+	var e []*fsnotify.FileEvent
+
+	// 采用线程池的方式处理，有效节省处理大量协程时协程切换的开销
+	pool := tunny.NewFunc(runtime.NumCPU(), func(payload interface{}) interface{} {
+
+		this.fileProcessor(payload.(*fsnotify.FileEvent))
+
+		// 延时处理以降低系统IO
+		// time.Sleep(100 * time.Millisecond)
+		return nil
+	})
+	defer pool.Close()
+
 	for {
 		select {
 		case e = <-taskChan:
-			this.adapterHandle(e)
+			this.adapterHandle(e, pool)
 		}
 	}
 }
 
-func (this *Watchdog) filterEvents(fileEvents []fsnotify.FileEvent) []fsnotify.FileEvent {
-	var list []fsnotify.FileEvent
+func (this *Watchdog) filterEvents(fevents []*fsnotify.FileEvent) []*fsnotify.FileEvent {
+	var l []*fsnotify.FileEvent
 	keys := make(map[string]bool)
-	// 倒序，确保list中维护一个最新的事件列表
-	for i := len(fileEvents) - 1; i >= 0; i-- {
-		filename := fileEvents[i].Name
+	// 倒序，确保l中维护一个最新的事件列表
+	for i := len(fevents) - 1; i >= 0; i-- {
+		filename := fevents[i].Name
 		if _, ok := keys[filename]; !ok {
 			keys[filename] = true
-			list = append(list, fileEvents[i])
+			l = append(l, fevents[i])
 		}
 	}
-	return list
+	return l
 }
 
-func (this *Watchdog) getFileMeta(fileEvent fsnotify.FileEvent) (*handler.FileMeta, error) {
-	fileInfo, err := os.Lstat(fileEvent.Name)
+func (this *Watchdog) GetFileMeta(fevent *fsnotify.FileEvent) (*handler.FileMeta, error) {
+	fi, err := os.Lstat(fevent.Name)
 	if err != nil {
-		return nil, err
+		return &handler.FileMeta{}, err
 	}
-	if fileInfo.IsDir() {
-		// this.hook.Listen("ProcessDirChange", this, fileInfo)
-		return nil, nil
+	if fi.IsDir() {
+		return &handler.FileMeta{}, nil
 	}
 
 	// 文件目录，支持跨平台
-	dirName := filepath.Dir(fileEvent.Name)
+	dirName := filepath.Dir(fevent.Name)
 	// filepath.Clean 自动转化目录分隔符，如 "C:/dev/workspace" => "C:\\dev\\workspace"
-	rootDirName := filepath.Clean(fileEvent.MonitorDir)
+	rootDirName := filepath.Clean(fevent.RootPath)
 	var pathSeparator string
 	if os.IsPathSeparator('\\') {
 		pathSeparator = "\\"
@@ -260,7 +265,7 @@ func (this *Watchdog) getFileMeta(fileEvent fsnotify.FileEvent) (*handler.FileMe
 
 	// 文件创建时间，支持跨平台
 	var fileCreateTime time.Time
-	fileTime := times.Get(fileInfo)
+	fileTime := times.Get(fi)
 	if fileTime.HasChangeTime() { // 非Win
 		fileCreateTime = fileTime.ChangeTime()
 	}
@@ -283,39 +288,40 @@ func (this *Watchdog) getFileMeta(fileEvent fsnotify.FileEvent) (*handler.FileMe
 	}
 
 	return &handler.FileMeta{
-		Filepath:   fileEvent.Name,
+		Filepath:   fevent.Name,
 		SubDir:     subDirName,
-		Filename:   fileInfo.Name(),
-		Ext:        strings.ToLower(filepath.Ext(fileInfo.Name())),
-		Size:       fileInfo.Size(),
+		Filename:   fi.Name(),
+		Ext:        strings.ToLower(filepath.Ext(fi.Name())),
+		Size:       fi.Size(),
 		CreateTime: fileCreateTime,
-		ModifyTime: fileInfo.ModTime(),
-		LastOp:     fileEvent,
+		ModifyTime: fi.ModTime(),
+		LastOp:     fevent,
 		Host:       this.host,
 		FolderTime: folderCreateTime,
 	}, nil
 }
 
-func (this *Watchdog) fileProcessor(file fsnotify.FileEvent) {
-
+func (this *Watchdog) fileProcessor(fevent *fsnotify.FileEvent) {
 	// 获取file简要信息
-	fileMeta, err := this.getFileMeta(file)
+	fileMeta, err := this.GetFileMeta(fevent)
 	if err != nil {
-		/*
-			e.g.
-			1) FindFirstFile D:\\I1000_testlog\\HP\\Matterhorn\\K2786401B\\NULL.txt: The system cannot find the file specified.
-		*/
-		this.Logger.Warn("[getFileMeta] %s %s", err, file)
-		return
+		// FindFirstFile D:\\I1000_testlog\\HP\\Matterhorn\\K2786401B\\NULL.txt: The system cannot find the file specified.
+		this.Logger.Warn("Fail to get origin file: %s", err)
+		// 如果是文件被删除了, 该咋办?
+		if err := this.hook.Listen("Handle404Error", this, fileMeta, fevent); err != nil {
+			this.Logger.Warn("Handle404Error hook throw exception: %s", err)
+			return
+		}
 	}
-	if fileMeta == nil {
+	if fileMeta.Filepath == "" {
+		this.Logger.Warn("The fileMeta is an empty struct, please check the event: %s %s", fevent.Op, fevent.Name)
 		return
 	}
 
 	// 支持Agent层级的清洗操作
 	if err := this.hook.Listen("CheckFile", this, fileMeta); err != nil {
-		this.Logger.Error("[fileProcessor] CheckFile hook return error: %s", err)
-		// 此类文件暂不做处理，稍后会由轮询程序检查重试
+		this.Logger.Warn("CheckFile hook throw exception: %s", err)
+		// 如果报文件不完整，那稍后应该还会有写入事件产生，所以暂不做处理
 		return
 	}
 	this.hook.Listen("Transform", this, fileMeta)
@@ -325,59 +331,37 @@ func (this *Watchdog) fileProcessor(file fsnotify.FileEvent) {
 	for _, Adapter := range this.adapters[fileMeta.LastOp.Biz] {
 		Adapter.SetLogger(this.Logger)
 		if err := Adapter.Handle(*fileMeta); err != nil {
-			this.Logger.Error("[fileProcessor] Adapter.Handle return error: %s", err)
+			this.Logger.Error("Adapter.Handle throw exception: %s", err)
 			failure = true
 			break
 		}
 	}
 	if failure {
-		this.Logger.Error("[fileProcessor] Need to rollback file: %s", fileMeta.Filepath)
-		// TODO:文件处理异常时需要将该文件事件传送至异常处理通道
+		this.Logger.Error("Need to rollback file: %s", fileMeta.Filepath)
+		// 文件处理异常时需要将该文件事件传送至异常处理通道
 		this.adapterRollback(fileMeta)
 		return
 	}
 
 	// 记录文件最新的md5值
-	this.cache.Put(file.Name, fileMeta.ModifyTime.String(), 0)
-	this.Logger.Debug("[Cache] %s %s", file.Name, this.cache.Get(file.Name))
+	this.cache.Put(fevent.Name, fileMeta.ModifyTime.String(), 0)
+	this.Logger.Debug("Cache key: %s, value: %s, timeout: 0", fevent.Name, this.cache.Get(fevent.Name))
 }
 
-func (this *Watchdog) adapterHandle(files []fsnotify.FileEvent) {
-	numCPUs := runtime.NumCPU()
-	numTask := len(files)
-
-	if numTask < numCPUs {
-		for _, file := range files {
-			this.Logger.Info("Process %s", file.Name)
-			go this.fileProcessor(file)
-		}
-		return
-	}
-
-	// 采用线程池的方式处理，有效节省处理大量协程时协程切换的开销
-	pool := tunny.NewFunc(numCPUs, func(payload interface{}) interface{} {
-
-		this.fileProcessor(payload.(fsnotify.FileEvent))
-
-		// 延时处理以降低系统IO
-		time.Sleep(100 * time.Millisecond)
-		return nil
-	})
-	defer pool.Close()
-
+func (this *Watchdog) adapterHandle(files []*fsnotify.FileEvent, pool *tunny.Pool) {
 	startTime := time.Now() // get current time
 
 	var wg sync.WaitGroup
-	wg.Add(numTask)
+	wg.Add(len(files))
 	for _, file := range files {
-		go func(input fsnotify.FileEvent) {
+		go func(e *fsnotify.FileEvent) {
 			defer wg.Done()
-			pool.Process(input)
+			pool.Process(e)
 		}(file)
 	}
 	wg.Wait()
 
-	this.Logger.Info("Finish %d tasks in %s", numTask, time.Since(startTime))
+	this.Logger.Info("Finish %d tasks in %s", len(files), time.Since(startTime))
 }
 
 func (this *Watchdog) adapterRollback(file *handler.FileMeta) {
@@ -392,5 +376,5 @@ func (this *Watchdog) adapterRollback(file *handler.FileMeta) {
 	// 	}
 	// 	syncWg.Wait()
 
-	// 	// TODO:将处理失败的事件传送至失败通道
+	// TODO:将处理失败的事件传送至失败通道
 }

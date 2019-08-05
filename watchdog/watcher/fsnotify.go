@@ -18,7 +18,7 @@ func (this *FsnotifyWatcher) SetLogger(logger *log.LogMgr) Watcher {
 	return this
 }
 
-func (this *FsnotifyWatcher) Listen(rule *Rule, taskChan chan fsnotify.FileEvent) error {
+func (this *FsnotifyWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.FileEvent) error {
 
 	watcher, err := fsnotify.NewRecursiveWatcher()
 	if err != nil {
@@ -26,22 +26,18 @@ func (this *FsnotifyWatcher) Listen(rule *Rule, taskChan chan fsnotify.FileEvent
 	}
 	// defer watcher.Close()
 
-	go watcher.NotifyFsEvent(rule.Path, func(err error, e fsnotify.FileEvent) {
+	go watcher.NotifyFsEvent(rule, func(e *fsnotify.FileEvent, err error) {
 		if err != nil {
-			this.logger.Error("[NotifyFsEvent] %s", err)
+			this.logger.Error("[fsnotify.NotifyFsEvent] %s", err)
 			return
 		}
-		// 过滤
-		if e.Op == "Create" || e.Op == "Write" {
+		this.logger.Info("[fsnotify.NotifyFsEvent] %s %s", e.Op, e.Name)
+		if e.Op == "CREATE" || e.Op == "WRITE" {
 			e.Biz = rule.Biz
+			e.RootPath = rule.RootPath
 			taskChan <- e
 		}
 	})
 
-	err = watcher.RecursiveAdd(rule.Path, rule.Regexp)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return watcher.RecursiveAdd(rule)
 }
