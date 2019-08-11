@@ -20,7 +20,7 @@ type FileMeta struct {
 	CreateTime   time.Time // 文件创建时间
 	ModifyTime   time.Time // 文件修改时间
 	Content      []byte
-	LastOp       *fsnotify.FileEvent
+	LastOp       *fsnotify.Event
 	Checksum     string
 	Compress     bool
 	CompressSize int64

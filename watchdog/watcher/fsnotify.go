@@ -18,7 +18,7 @@ func (this *FsnotifyWatcher) SetLogger(logger *log.LogMgr) Watcher {
 	return this
 }
 
-func (this *FsnotifyWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.FileEvent) error {
+func (this *FsnotifyWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.Event) error {
 
 	watcher, err := fsnotify.NewRecursiveWatcher()
 	if err != nil {
@@ -26,7 +26,7 @@ func (this *FsnotifyWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotify
 	}
 	// defer watcher.Close()
 
-	go watcher.NotifyFsEvent(rule, func(e *fsnotify.FileEvent, err error) {
+	go watcher.NotifyFsEvent(rule, func(e *fsnotify.Event, err error) {
 		if err != nil {
 			this.logger.Error("[fsnotify.NotifyFsEvent] %s", err)
 			return

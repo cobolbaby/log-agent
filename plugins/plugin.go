@@ -31,7 +31,7 @@ type Plugin interface {
 	Mount(*watchdog.Watchdog) error
 	CheckFile(*watchdog.Watchdog, *handler.FileMeta) error
 	Transform(*watchdog.Watchdog, *handler.FileMeta) error
-	Handle404Error(watchDog *watchdog.Watchdog, file *handler.FileMeta, fevent *fsnotify.FileEvent) error
+	Handle404Error(watchDog *watchdog.Watchdog, file *handler.FileMeta, fevent *fsnotify.Event) error
 }
 
 type DefaultPlugin struct {
@@ -122,7 +122,7 @@ func (this *DefaultPlugin) AutoInit(watchDog *watchdog.Watchdog) error {
 	})
 
 	watchStrategy := []string{watcher.FS_NOTIFY}
-	if !this.Config.HasKey("historical_data_import") || (this.Config.HasKey("historical_data_import") && this.Config.Key("historical_data_import").MustBool() == true) {
+	if !this.Config.HasKey("history_import") || (this.Config.HasKey("history_import") && this.Config.Key("history_import").MustBool() == true) {
 		watchStrategy = append(watchStrategy, watcher.FS_POLL)
 	}
 	watchDog.SetWatchStrategy(this.Name(), watchStrategy)
@@ -170,7 +170,7 @@ func (this *DefaultPlugin) Mount(watchDog *watchdog.Watchdog) error {
 	return nil
 }
 
-func (this *DefaultPlugin) Handle404Error(watchDog *watchdog.Watchdog, file *handler.FileMeta, fevent *fsnotify.FileEvent) error {
+func (this *DefaultPlugin) Handle404Error(watchDog *watchdog.Watchdog, file *handler.FileMeta, fevent *fsnotify.Event) error {
 
 	// 扩展代码...
 

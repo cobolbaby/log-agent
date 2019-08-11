@@ -25,7 +25,7 @@ func (this *FspollingWatcher) SetLogger(logger *log.LogMgr) Watcher {
 	return this
 }
 
-func (this *FspollingWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.FileEvent) error {
+func (this *FspollingWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.Event) error {
 	fi, err := os.Stat(rule.MonitPath)
 	if err != nil {
 		return err
@@ -40,7 +40,7 @@ func (this *FspollingWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotif
 			this.logger.Info("[FspollingWatcher] %s LoopScan Start, Path: %s", rule.Biz, rule.MonitPath)
 			affectedNum := 0
 
-			fsnotify.WalkDir(rule, 1, func(e *fsnotify.FileEvent) error {
+			fsnotify.WalkDir(rule, 1, func(e *fsnotify.Event) error {
 				if e.IsDir {
 					return nil
 				}

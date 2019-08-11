@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-type FileEvent struct {
+type Event struct {
+	Name     string
+	Op       string
 	Biz      string
 	RootPath string
-	Name     string
 	ModTime  time.Time
 	IsDir    bool
-	Op       string
 }
 
 type Rule struct {
@@ -40,7 +40,7 @@ func NewRecursiveWatcher() (*RecursiveWatcher, error) {
 	return &RecursiveWatcher{watcher}, nil
 }
 
-func (w *RecursiveWatcher) NotifyFsEvent(rule *Rule, cb func(e *FileEvent, err error)) {
+func (w *RecursiveWatcher) NotifyFsEvent(rule *Rule, cb func(e *Event, err error)) {
 	for {
 		select {
 		case event := <-w.Events:
@@ -50,7 +50,7 @@ func (w *RecursiveWatcher) NotifyFsEvent(rule *Rule, cb func(e *FileEvent, err e
 				// 文件--如果新建文件的父目录被监控了，Create事件就会被抛出，所以无需再次添加至监控列表
 				// 如果将文件也添加至监控列表，则内存中需要维护一个大的map，出现内存持续飙升的问题
 				if !CheckIfMatch(event.Name, rule) || CheckIfIgnore(event.Name, rule) {
-					fmt.Println("Ignore fs event:", event.Op, event.Name)
+					// fmt.Printf("%s ignore fs event: %s %s", rule.Biz, event.Op, event.Name)
 					continue
 				}
 				fi, err := os.Stat(event.Name)
@@ -65,7 +65,7 @@ func (w *RecursiveWatcher) NotifyFsEvent(rule *Rule, cb func(e *FileEvent, err e
 						Ignores:   rule.Ignores,
 					})
 				}
-				cb(&FileEvent{
+				cb(&Event{
 					Op:   "CREATE",
 					Name: event.Name,
 				}, nil)
@@ -77,10 +77,10 @@ func (w *RecursiveWatcher) NotifyFsEvent(rule *Rule, cb func(e *FileEvent, err e
 				// TODO:上述说法在直接拷贝目录的业务场景下不成立，后续还得继续支持该业务场景
 				// 文件--Write事件因文件内容修改引起，所以无需再次添加监控列表
 				if !CheckIfMatch(event.Name, rule) || CheckIfIgnore(event.Name, rule) {
-					fmt.Println("Ignore fs event:", event.Op, event.Name)
+					// fmt.Printf("%s ignore fs event: %s %s", rule.Biz, event.Op, event.Name)
 					continue
 				}
-				cb(&FileEvent{
+				cb(&Event{
 					Op:   "WRITE",
 					Name: event.Name,
 				}, nil)
@@ -90,11 +90,11 @@ func (w *RecursiveWatcher) NotifyFsEvent(rule *Rule, cb func(e *FileEvent, err e
 				// 目录--Remove事件因目录删除引起，如果将其移出监控列表，可优化内存使用，但当前业务不涉及移除目录的操作
 				// 文件--Remove事件因文件删除引起，而监控列表中仅保存了目录，所以没有什么好移除的
 				if !CheckIfMatch(event.Name, rule) || CheckIfIgnore(event.Name, rule) {
-					fmt.Println("Ignore fs event:", event.Op, event.Name)
+					// fmt.Printf("%s ignore fs event: %s %s", rule.Biz, event.Op, event.Name)
 					continue
 				}
 				// w.Remove(event.Name)
-				cb(&FileEvent{
+				cb(&Event{
 					Op:   "REMOVE",
 					Name: event.Name,
 				}, nil)
@@ -104,11 +104,11 @@ func (w *RecursiveWatcher) NotifyFsEvent(rule *Rule, cb func(e *FileEvent, err e
 				// 目录--Rename事件与目录删除等同，如果将其移出监控列表，可优化内存使用，但当前业务不涉及移除目录的操作
 				// 文件--Rename事件与文件删除等同，而监控列表中仅保存了目录，所以没有什么好移除的
 				if !CheckIfMatch(event.Name, rule) || CheckIfIgnore(event.Name, rule) {
-					fmt.Println("Ignore fs event:", event.Op, event.Name)
+					// fmt.Printf("%s ignore fs event: %s %s", rule.Biz, event.Op, event.Name)
 					continue
 				}
 				// w.Remove(event.Name)
-				cb(&FileEvent{
+				cb(&Event{
 					Op:   "RENAME",
 					Name: event.Name,
 				}, nil)
@@ -131,7 +131,7 @@ func (w *RecursiveWatcher) RecursiveAdd(rule *Rule) error {
 	if !fi.IsDir() {
 		return nil
 	}
-	return WalkDir(rule, 1, func(e *FileEvent) error {
+	return WalkDir(rule, 1, func(e *Event) error {
 		// 监控目录就能实时监听目录下的文件了, 所以没必要下那么多监听事件
 		if !e.IsDir {
 			return nil
@@ -141,8 +141,8 @@ func (w *RecursiveWatcher) RecursiveAdd(rule *Rule) error {
 	})
 }
 
-// func WalkDir(dir string, pattern string, fn func(e FileEvent) error) error {
-func WalkDir(rule *Rule, level uint, fn func(e *FileEvent) error) error {
+// func WalkDir(dir string, pattern string, fn func(e Event) error) error {
+func WalkDir(rule *Rule, level uint, fn func(e *Event) error) error {
 	// ReadDir reads the directory named by dirname and returns a list of directory entries sorted by filename.
 	// entries, err := ioutil.ReadDir(dir)
 	// Ref: https://flaviocopes.com/go-list-files/
@@ -161,7 +161,7 @@ func WalkDir(rule *Rule, level uint, fn func(e *FileEvent) error) error {
 		if !CheckIfMatch(subdir, rule) || CheckIfIgnore(subdir, rule) {
 			continue
 		}
-		fn(&FileEvent{
+		fn(&Event{
 			Name:    subdir,
 			ModTime: entry.ModTime(),
 			IsDir:   entry.IsDir(),
