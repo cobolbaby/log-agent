@@ -141,7 +141,6 @@ func (w *RecursiveWatcher) RecursiveAdd(rule *Rule) error {
 	})
 }
 
-// func WalkDir(dir string, pattern string, fn func(e Event) error) error {
 func WalkDir(rule *Rule, level uint, fn func(e *Event) error) error {
 	// ReadDir reads the directory named by dirname and returns a list of directory entries sorted by filename.
 	// entries, err := ioutil.ReadDir(dir)
@@ -169,8 +168,10 @@ func WalkDir(rule *Rule, level uint, fn func(e *Event) error) error {
 		})
 		// 支持设定目录监控的深度
 		if entry.IsDir() && (rule.MaxNestingLevel == 0 || (rule.MaxNestingLevel != 0 && level < rule.MaxNestingLevel)) {
-			rule.MonitPath = subdir
-			WalkDir(rule, level+1, fn)
+			r := new(Rule)
+			*r = *rule
+			r.MonitPath = subdir
+			WalkDir(r, level+1, fn)
 		}
 	}
 	return nil
