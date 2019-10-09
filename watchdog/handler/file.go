@@ -12,7 +12,7 @@ import (
 type FileAdapter struct {
 	Name     string
 	Config   *FileAdapterCfg
-	logger   *log.LogMgr
+	logger   log.Logger
 	Priority uint8
 }
 
@@ -33,7 +33,7 @@ func NewFileAdapter(Cfg *FileAdapterCfg) (WatchdogHandler, error) {
 	}, nil
 }
 
-func (this *FileAdapter) SetLogger(logger *log.LogMgr) {
+func (this *FileAdapter) SetLogger(logger log.Logger) {
 	this.logger = logger
 }
 
@@ -54,15 +54,15 @@ func (this *FileAdapter) Handle(fi FileMeta) error {
 		return nil
 	}
 	if err := copy.Copy(fi.Filepath, destPath); err != nil {
-		this.logger.Error("[FileAdapter] %s Failed to copy, %s", fi.Filepath, err)
+		this.logger.Errorf("[FileAdapter] %s Failed to copy, %s", fi.Filepath, err)
 		return err
 	}
 	// 要确保备份文件的创建时间不变
 	if err := Chtimes(destPath, fi.CreateTime, fi.ModifyTime, fi.ModifyTime); err != nil {
-		this.logger.Error("[FileAdapter] Failed to rsync the create time of %s, %s", fi.Filepath, err)
+		this.logger.Errorf("[FileAdapter] Failed to rsync the create time of %s, %s", fi.Filepath, err)
 		return err
 	}
-	this.logger.Debug("[FileAdapter] %s rsync to %s", fi.Filepath, destPath)
+	this.logger.Debugf("[FileAdapter] %s rsync to %s", fi.Filepath, destPath)
 	return nil
 }
 

@@ -6,8 +6,8 @@ import (
 )
 
 type Watcher interface {
-	Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.Event) error
-	SetLogger(logger *log.LogMgr) Watcher
+	Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.Event)
+	SetLogger(logger log.Logger) Watcher
 }
 
 const (

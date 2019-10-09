@@ -26,6 +26,7 @@ type Rule struct {
 	Ignores         string
 	MaxNestingLevel uint
 	DebounceTime    time.Duration
+	Done            chan struct{}
 }
 
 type RecursiveWatcher struct {
@@ -117,6 +118,9 @@ func (w *RecursiveWatcher) NotifyFsEvent(rule *Rule, cb func(e *Event, err error
 		case err := <-w.Errors:
 			// fmt.Printf("w.Errors: %s", err)
 			cb(nil, err)
+		case <-rule.Done:
+			fmt.Printf("Close %s fsnotify", rule.Biz)
+			return
 		}
 	}
 }

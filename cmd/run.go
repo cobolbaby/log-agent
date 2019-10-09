@@ -4,9 +4,10 @@ import (
 	"github.com/cobolbaby/log-agent/plugins"
 	. "github.com/cobolbaby/log-agent/utils"
 	"github.com/cobolbaby/log-agent/watchdog"
-	"github.com/cobolbaby/log-agent/watchdog/lib/log"
-	"github.com/bcicen/grmon/agent"
 	"github.com/kardianos/osext"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"path/filepath"
 )
 
@@ -15,24 +16,33 @@ func Run() {
 
 	fullexecpath, _ := osext.Executable()
 	execdir, _ := filepath.Split(fullexecpath)
-	logger := log.NewLogMgr(filepath.Join(execdir, "logs"))
 
 	agentSwitch := cfg.Section("").Key("switch").MustBool()
 	if !agentSwitch {
-		logger.Fatal("LogAgent Monitor Switch Close :)")
+		log.Fatal("LogAgent Monitor Switch Close :)")
 	}
-	if cfg.Section("").Key("hostname").Value() == "localhost" {
-		logger.Fatal("Please Modify hostname in logagent.ini :)")
+	hostname := cfg.Section("").Key("hostname").Value()
+	if hostname == "localhost" {
+		log.Fatal("Please Modify hostname in logagent.ini :)")
+	}
+	dataPath := cfg.Section("").Key("data").Value()
+	if dataPath == "" {
+		dataPath = filepath.Join(execdir, "data")
+	}
+	logPath := cfg.Section("").Key("logs").Value()
+	if logPath == "" {
+		logPath = filepath.Join(execdir, "logs")
 	}
 
 	watchdog.NewWatchdog().
-		SetHost(cfg.Section("").Key("hostname").Value()).
-		SetLogger(logger).
+		SetHost(hostname).
+		SetLogPath(logPath).
+		SetDataPath(dataPath).
 		LoadPlugins(plugins.Autoload()).
 		Run()
 
 	// 启动程序监控
-	grmon.Start()
+	go http.ListenAndServe(":12345", nil)
 
 	// TODO:推送心跳信息
 }

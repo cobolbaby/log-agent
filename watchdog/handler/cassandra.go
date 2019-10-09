@@ -25,7 +25,7 @@ var (
 type CassandraAdapter struct {
 	Name     string
 	Config   *CassandraAdapterCfg
-	logger   *log.LogMgr
+	logger   log.Logger
 	Priority uint8
 	Session  *gocql.Session
 }
@@ -52,7 +52,7 @@ func NewCassandraAdapter(Cfg *CassandraAdapterCfg) (WatchdogHandler, error) {
 	return self, nil
 }
 
-func (this *CassandraAdapter) SetLogger(logger *log.LogMgr) {
+func (this *CassandraAdapter) SetLogger(logger log.Logger) {
 	this.logger = logger
 }
 
@@ -64,7 +64,7 @@ func (this *CassandraAdapter) Handle(fi FileMeta) error {
 
 	// 针对超大文件执行过滤操作
 	if fi.Size > MAX_FILE_SIZE {
-		this.logger.Warn("[CassandraAdapter] %s 文件大小超过16M", fi.Filepath)
+		this.logger.Warnf("[CassandraAdapter] %s 文件大小超过16M", fi.Filepath)
 		return nil
 	}
 
@@ -84,7 +84,7 @@ func (this *CassandraAdapter) uploadUnArchivedFile(fi *FileMeta) error {
 			break
 		}
 		if i < attempts {
-			this.logger.Warn("[CassandraAdapter] ioutil.ReadFile error: %s, retry #%d", err, i)
+			this.logger.Warnf("[CassandraAdapter] ioutil.ReadFile error: %s, retry #%d", err, i)
 			time.Sleep(time.Duration(i) * time.Second)
 		}
 	}
@@ -93,7 +93,7 @@ func (this *CassandraAdapter) uploadUnArchivedFile(fi *FileMeta) error {
 			e.g.
 			1) File Handle Error: open D:\\I1000_testlog\\HP\\Matterhorn\\K2786401B\\board\\20181213181445__All.txt: The process cannot access the file because it is being used by another process.
 		*/
-		this.logger.Error("[CassandraAdapter] %s ioutil.ReadFile error, %s", fi.Filepath, err)
+		this.logger.Errorf("[CassandraAdapter] %s ioutil.ReadFile error, %s", fi.Filepath, err)
 		return err
 	}
 	return this.upload(fi)
@@ -101,7 +101,7 @@ func (this *CassandraAdapter) uploadUnArchivedFile(fi *FileMeta) error {
 
 func (this *CassandraAdapter) uploadZipedFile(fi *FileMeta) error {
 	if fi.Size == 0 {
-		this.logger.Error("[CassandraAdapter] %s is not a valid zip", fi.Filepath)
+		this.logger.Errorf("[CassandraAdapter] %s is not a valid zip", fi.Filepath)
 		// TODO:预警
 		return nil
 		// 对于非正确格式的Zip包，采用常规方式进行上传
@@ -112,7 +112,7 @@ func (this *CassandraAdapter) uploadZipedFile(fi *FileMeta) error {
 	// Open a zip archive for reading.
 	r, err := zip.OpenReader(fi.Filepath)
 	if err != nil {
-		this.logger.Error("[CassandraAdapter] %s zip.OpenReader error, %s", fi.Filepath, err)
+		this.logger.Errorf("[CassandraAdapter] %s zip.OpenReader error, %s", fi.Filepath, err)
 		return err
 	}
 	defer r.Close()
@@ -128,7 +128,7 @@ func (this *CassandraAdapter) uploadZipedFile(fi *FileMeta) error {
 		if !utf8.ValidString(f.Name) {
 			f.Name, err = GBKToUTF8(f.Name)
 			if err != nil {
-				this.logger.Warn("[CassandraAdapter] %s is not a valid utf-8/gbk string", f.Name)
+				this.logger.Warnf("[CassandraAdapter] %s is not a valid utf-8/gbk string", f.Name)
 				return err
 			}
 		}
@@ -149,13 +149,13 @@ func (this *CassandraAdapter) uploadZipedFile(fi *FileMeta) error {
 
 		rc, err := f.Open()
 		if err != nil {
-			this.logger.Error("[CassandraAdapter] %s f.Open error, %s", f.Name, err)
+			this.logger.Errorf("[CassandraAdapter] %s f.Open error, %s", f.Name, err)
 			return err
 		}
 		defer rc.Close()
 
 		if file.Content, err = ioutil.ReadAll(rc); err != nil {
-			this.logger.Error("[CassandraAdapter] %s ioutil.ReadAll error, %s", f.Name, err)
+			this.logger.Errorf("[CassandraAdapter] %s ioutil.ReadAll error, %s", f.Name, err)
 			return err
 		}
 
@@ -176,7 +176,7 @@ func (this *CassandraAdapter) upload(fi *FileMeta) error {
 		var err error
 		fi.Content, err = compress.GzipContent(fi.Content)
 		if err != nil {
-			this.logger.Error("[CassandraAdapter] %s couldn't be compressed, %s", fi.Filepath, err)
+			this.logger.Errorf("[CassandraAdapter] %s couldn't be compressed, %s", fi.Filepath, err)
 			return err
 		}
 
@@ -253,10 +253,10 @@ func (this *CassandraAdapter) Insert(item *FileMeta) error {
 		time.Now())
 	err := q.Exec()
 	if err != nil {
-		this.logger.Error("[CassandraAdapter] Table %s insert couldn't be exec, %s", this.Config.TableName, err)
+		this.logger.Errorf("[CassandraAdapter] Table %s insert couldn't be exec, %s", this.Config.TableName, err)
 		return err
 	}
-	this.logger.Debug("[CassandraAdapter] Upload %s", item.Filepath)
+	this.logger.Debugf("[CassandraAdapter] Upload %s", item.Filepath)
 	return nil
 }
 
@@ -313,7 +313,7 @@ func (this *CassandraAdapter) CreateSession() error {
 
 	session, err := cluster.CreateSession()
 	if err != nil {
-		this.logger.Error("Could not connect to Cassandra Cluster: %s", err)
+		this.logger.Errorf("Could not connect to Cassandra Cluster: %s", err)
 		return err
 	}
 

@@ -8,11 +8,21 @@ import (
 	"path/filepath"
 )
 
-type LogMgr struct {
-	logger *logrus.Logger
+type Logger interface {
+	Fatalf(string, ...interface{})
+	Errorf(string, ...interface{})
+	Warningf(string, ...interface{})
+	Warnf(string, ...interface{})
+	Infof(string, ...interface{})
+	Debugf(string, ...interface{})
+	Fatal(...interface{})
+	Error(...interface{})
+	Warn(...interface{})
+	Info(...interface{})
+	Debug(...interface{})
 }
 
-func NewLogMgr(logPath string) *LogMgr {
+func NewLogger(path string) Logger {
 
 	logrusLogger := logrus.New()
 
@@ -21,7 +31,7 @@ func NewLogMgr(logPath string) *LogMgr {
 
 	// 设置将日志输出到标准输出（默认的输出为stderr，标准错误）
 	// 日志消息输出可以是任意的io.writer类型
-	logFile, err := rotatelogs.New(filepath.Join(logPath, "logagent-%Y%m%d.log"))
+	logFile, err := rotatelogs.New(filepath.Join(path, "logagent-%Y%m%d.log"))
 	if err != nil {
 		logrusLogger.SetOutput(os.Stdout)
 		logrusLogger.Error("Conldn't create 'logs' directory, please make sure the directory permissions :)")
@@ -37,27 +47,5 @@ func NewLogMgr(logPath string) *LogMgr {
 	logrusLogger.SetLevel(logrus.InfoLevel)
 	// logrusLogger.SetLevel(logrus.WarnLevel)
 
-	return &LogMgr{
-		logger: logrusLogger,
-	}
-}
-
-func (this *LogMgr) Fatal(format string, v ...interface{}) {
-	this.logger.Fatalf(format, v...)
-}
-
-func (this *LogMgr) Error(format string, v ...interface{}) {
-	this.logger.Errorf(format, v...)
-}
-
-func (this *LogMgr) Warn(format string, v ...interface{}) {
-	this.logger.Warnf(format, v...)
-}
-
-func (this *LogMgr) Info(format string, v ...interface{}) {
-	this.logger.Infof(format, v...)
-}
-
-func (this *LogMgr) Debug(format string, v ...interface{}) {
-	this.logger.Debugf(format, v...)
+	return logrusLogger
 }

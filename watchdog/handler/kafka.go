@@ -96,7 +96,7 @@ const (
 type KafkaAdapter struct {
 	Name     string
 	Config   *KafkaAdapterCfg
-	logger   *log.LogMgr
+	logger   log.Logger
 	Priority uint8
 	producer sarama.SyncProducer
 	// schemaRegistryClient *kafka.CachedSchemaRegistryClient
@@ -159,7 +159,7 @@ func (this *KafkaAdapter) newSyncProducer() error {
 	return nil
 }
 
-func (this *KafkaAdapter) SetLogger(logger *log.LogMgr) {
+func (this *KafkaAdapter) SetLogger(logger log.Logger) {
 	this.logger = logger
 }
 
@@ -191,7 +191,7 @@ func (this *KafkaAdapter) uploadUnArchivedFile(fi *FileMeta) error {
 			break
 		}
 		if i < attempts {
-			this.logger.Warn("[KafkaAdapter] ioutil.ReadFile error: %s, retry #%d", err, i)
+			this.logger.Warnf("[KafkaAdapter] ioutil.ReadFile error: %s, retry #%d", err, i)
 			time.Sleep(time.Duration(i) * time.Second)
 		}
 	}
@@ -200,7 +200,7 @@ func (this *KafkaAdapter) uploadUnArchivedFile(fi *FileMeta) error {
 			e.g.
 			1) File Handle Error: open D:\\I1000_testlog\\HP\\Matterhorn\\K2786401B\\board\\20181213181445__All.txt: The process cannot access the file because it is being used by another process.
 		*/
-		this.logger.Error("[KafkaAdapter] %s ioutil.ReadFile error, %s", fi.Filepath, err)
+		this.logger.Errorf("[KafkaAdapter] %s ioutil.ReadFile error, %s", fi.Filepath, err)
 		return err
 	}
 	return this.upload(fi)
@@ -208,7 +208,7 @@ func (this *KafkaAdapter) uploadUnArchivedFile(fi *FileMeta) error {
 
 func (this *KafkaAdapter) uploadZipedFile(fi *FileMeta) error {
 	if fi.Size == 0 {
-		this.logger.Error("[KafkaAdapter] %s is not a valid zip", fi.Filepath)
+		this.logger.Errorf("[KafkaAdapter] %s is not a valid zip", fi.Filepath)
 		// TODO:预警
 		return nil
 		// 对于非正确格式的Zip包，采用常规方式进行上传
@@ -219,7 +219,7 @@ func (this *KafkaAdapter) uploadZipedFile(fi *FileMeta) error {
 	// Open a zip archive for reading.
 	r, err := zip.OpenReader(fi.Filepath)
 	if err != nil {
-		this.logger.Error("[KafkaAdapter] %s zip.OpenReader error, %s", fi.Filepath, err)
+		this.logger.Errorf("[KafkaAdapter] %s zip.OpenReader error, %s", fi.Filepath, err)
 		return err
 	}
 	defer r.Close()
@@ -235,7 +235,7 @@ func (this *KafkaAdapter) uploadZipedFile(fi *FileMeta) error {
 		if !utf8.ValidString(f.Name) {
 			f.Name, err = GBKToUTF8(f.Name)
 			if err != nil {
-				this.logger.Warn("[KafkaAdapter] %s is not a valid utf-8/gbk string", f.Name)
+				this.logger.Warnf("[KafkaAdapter] %s is not a valid utf-8/gbk string", f.Name)
 				return err
 			}
 		}
@@ -256,13 +256,13 @@ func (this *KafkaAdapter) uploadZipedFile(fi *FileMeta) error {
 
 		rc, err := f.Open()
 		if err != nil {
-			this.logger.Error("[KafkaAdapter] %s f.Open error, %s", f.Name, err)
+			this.logger.Errorf("[KafkaAdapter] %s f.Open error, %s", f.Name, err)
 			return err
 		}
 		defer rc.Close()
 
 		if file.Content, err = ioutil.ReadAll(rc); err != nil {
-			this.logger.Error("[KafkaAdapter] %s ioutil.ReadAll error, %s", f.Name, err)
+			this.logger.Errorf("[KafkaAdapter] %s ioutil.ReadAll error, %s", f.Name, err)
 			return err
 		}
 
@@ -283,7 +283,7 @@ func (this *KafkaAdapter) upload(fi *FileMeta) error {
 		var err error
 		fi.Content, err = compress.GzipContent(fi.Content)
 		if err != nil {
-			this.logger.Error("[KafkaAdapter] %s couldn't be compressed, %s", fi.Filepath, err)
+			this.logger.Errorf("[KafkaAdapter] %s couldn't be compressed, %s", fi.Filepath, err)
 			return err
 		}
 
@@ -347,7 +347,7 @@ func (this *KafkaAdapter) Insert(fi *FileMeta) error {
 	schema := make(map[string]interface{})
 	err := json.Unmarshal([]byte(recordSchemaJSON), &schema)
 	if err != nil {
-		this.logger.Error("[KafkaAdapter] recordSchemaJSON json.Unmarshal error, %s", err)
+		this.logger.Errorf("[KafkaAdapter] recordSchemaJSON json.Unmarshal error, %s", err)
 		return err
 	}
 
@@ -407,7 +407,7 @@ func (this *KafkaAdapter) Insert(fi *FileMeta) error {
 	if _, _, err := this.producer.SendMessage(msg); err != nil {
 		return err
 	}
-	this.logger.Debug("[KafkaAdapter] Upload %s", fi.Filepath)
+	this.logger.Debugf("[KafkaAdapter] Upload %s", fi.Filepath)
 	return nil
 }
 

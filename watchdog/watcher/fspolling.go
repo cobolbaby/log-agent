@@ -1,51 +1,52 @@
 package watcher
 
 import (
+	"bytes"
 	"github.com/cobolbaby/log-agent/watchdog/lib/fsnotify"
 	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"errors"
-	"github.com/astaxie/beego/cache"
-	"os"
+	"fmt"
+	"github.com/dgraph-io/badger"
 	"time"
 )
 
+const (
+	FS_POLL_INTERVAL = 10 * time.Minute // 文件系统轮询时间间隔
+)
+
 type FspollingWatcher struct {
-	logger   *log.LogMgr
-	interval time.Duration
+	logger log.Logger
+	db     *badger.DB
 }
 
-func NewFspollingWatcher(interval time.Duration) Watcher {
+func NewFspollingWatcher(db *badger.DB) Watcher {
 	return &FspollingWatcher{
-		interval: interval,
+		db: db,
 	}
 }
 
-func (this *FspollingWatcher) SetLogger(logger *log.LogMgr) Watcher {
+func (this *FspollingWatcher) SetLogger(logger log.Logger) Watcher {
 	this.logger = logger
 	return this
 }
 
-func (this *FspollingWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.Event) error {
-	fi, err := os.Stat(rule.MonitPath)
-	if err != nil {
-		return err
-	}
-	if !fi.IsDir() {
-		return errors.New("暂不支持监控单一文件")
-	}
+func (this *FspollingWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotify.Event) {
 
 	go func() {
-		bm, _ := cache.NewCache("file", `{"CachePath":"./.cache","FileSuffix":".txt","DirectoryLevel":"2", "EmbedExpiry":"0"}`)
+		// 目录遍历不受递归层级的限制，作用是在保证高效实时监听的情况下，避免影响历史数据导入
+		r := new(fsnotify.Rule)
+		*r = *rule
+		r.MaxNestingLevel = 0
 		for {
-			this.logger.Info("[FspollingWatcher] %s LoopScan Start, Path: %s", rule.Biz, rule.MonitPath)
-			affectedNum := 0
+			this.logger.Infof("Start to scan %s, Path: %s", rule.Biz, rule.MonitPath)
 
-			fsnotify.WalkDir(rule, 1, func(e *fsnotify.Event) error {
+			affectedNum := 0
+			err := fsnotify.WalkDir(r, 1, func(e *fsnotify.Event) error {
 				if e.IsDir {
 					return nil
 				}
 				// 检测文件是否变更
-				if bm.IsExist(e.Name) && bm.Get(e.Name) == e.ModTime.String() {
+				if t, _ := e.ModTime.GobEncode(); this.isSaved([]byte(e.Name), t) {
 					return nil
 				}
 				// 完善事件信息, 交给下游处理
@@ -56,11 +57,31 @@ func (this *FspollingWatcher) Listen(rule *fsnotify.Rule, taskChan chan *fsnotif
 				affectedNum++
 				return nil
 			})
+			if err != nil {
+				this.logger.Errorf("The error occured during polling filesystem: %s", err)
+			}
 
-			this.logger.Info("[FspollingWatcher] %s LoopScan End, AffectedNum: %d", rule.Biz, affectedNum)
-			time.Sleep(this.interval)
+			this.logger.Infof("End to scan %s, AffectedNum: #%d", rule.Biz, affectedNum)
+			time.Sleep(FS_POLL_INTERVAL)
 		}
 	}()
 
-	return nil
+}
+
+func (this *FspollingWatcher) isSaved(k []byte, v []byte) bool {
+	// check if the same key=value already exists
+	err := this.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(k)
+		if err != nil { // not found
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			if bytes.Equal(val, v) { // already saved
+				return nil
+			}
+			errmsg := fmt.Sprintf("%s is already updated", v)
+			return errors.New(errmsg)
+		})
+	})
+	return err == nil
 }

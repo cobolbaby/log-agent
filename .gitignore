@@ -1,6 +1,7 @@
 .vscode
-vendor
 debug
+vendor
 .cache
-.fuse*
+data
 logs
+.fuse*

@@ -7,7 +7,8 @@ import (
 	"github.com/cobolbaby/log-agent/watchdog/lib/log"
 	"github.com/cobolbaby/log-agent/watchdog/watcher"
 	"github.com/Jeffail/tunny"
-	"github.com/astaxie/beego/cache"
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/options"
 	"github.com/djherbis/times"
 	"os"
 	"path/filepath"
@@ -19,32 +20,28 @@ import (
 )
 
 const (
-	SOURCE_QUEUE_CAP         = 100              // 新消息上报通道容量
-	CACHE_QUEUE_CAP          = 100              // 缓存处理通道容量
-	TASK_QUEUE_CAP           = 2                // 待处理任务通道容量
-	TASK_CONCURRENCY_CONTROL = 100              // 任务并发控制
-	FS_POLL_INTERVAL         = 10 * time.Minute // 文件系统轮询时间间隔
+	SOURCE_QUEUE_CAP         = 100 // 新消息上报通道容量
+	CACHE_QUEUE_CAP          = 100 // 缓存处理通道容量
+	TASK_QUEUE_CAP           = 2   // 待处理任务通道容量
+	TASK_CONCURRENCY_CONTROL = 100 // 任务并发控制
 )
 
 type Watchdog struct {
 	host     string
-	Logger   *log.LogMgr
+	Logger   log.Logger
 	watchers map[string][]string
 	rules    map[string]*fsnotify.Rule
 	adapters map[string][]handler.WatchdogHandler // 优先级队列
 	hook     *hook.AdvanceHook
-	cache    cache.Cache
+	db       *badger.DB
 }
 
 func NewWatchdog() *Watchdog {
-	bm, _ := cache.NewCache("file", `{"CachePath":"./.cache","FileSuffix":".txt","DirectoryLevel":"2", "EmbedExpiry":"0"}`)
-
 	return &Watchdog{
 		watchers: make(map[string][]string),
 		rules:    make(map[string]*fsnotify.Rule),
 		adapters: make(map[string][]handler.WatchdogHandler),
 		hook:     hook.NewAdvanceHook(),
-		cache:    bm,
 	}
 }
 
@@ -53,8 +50,26 @@ func (this *Watchdog) SetHost(hostname string) *Watchdog {
 	return this
 }
 
-func (this *Watchdog) SetLogger(logger *log.LogMgr) *Watchdog {
-	this.Logger = logger
+func (this *Watchdog) SetLogPath(path string) *Watchdog {
+	this.Logger = log.NewLogger(path)
+	return this
+}
+
+func (this *Watchdog) SetDataPath(path string) *Watchdog {
+
+	// fix: Value log truncate required to run DB. This might result in data loss
+	db, err := badger.Open(
+		badger.DefaultOptions(path).
+			WithLogger(this.Logger).
+			WithTruncate(true).
+			WithSyncWrites(false).
+			WithValueLogLoadingMode(options.FileIO))
+	if err != nil {
+		this.Logger.Fatalf("Fail to execute badger.Open: %s", err)
+	}
+	// defer db.Close()
+
+	this.db = db
 	return this
 }
 
@@ -120,15 +135,15 @@ func (this *Watchdog) Run() {
 	this.SetDefaultHandler(handler.Console)
 	// 插件配置自检
 	if err := this.hook.Listen("AutoCheck", this); err != nil {
-		this.Logger.Fatal("AutoCheck hook throw exception: %s", err)
+		this.Logger.Fatalf("AutoCheck hook throw exception: %s", err)
 	}
 	// 挂载插件初始化配置
 	if err := this.hook.Listen("AutoInit", this); err != nil {
-		this.Logger.Fatal("AutoInit hook throw exception: %s", err)
+		this.Logger.Fatalf("AutoInit hook throw exception: %s", err)
 	}
 	// 挂载插件自定义配置
 	if err := this.hook.Listen("Mount", this); err != nil {
-		this.Logger.Fatal("Mount hook throw exception: %s", err)
+		this.Logger.Fatalf("Mount hook throw exception: %s", err)
 	}
 	// 同时监控多种业务
 	cacheQueueChan := make(chan *fsnotify.Event, CACHE_QUEUE_CAP)
@@ -136,7 +151,7 @@ func (this *Watchdog) Run() {
 	for _, aRule := range this.rules {
 		srcQueueChan := make(chan *fsnotify.Event, SOURCE_QUEUE_CAP)
 
-		go this.listen(aRule, srcQueueChan)
+		go this.listen(aRule, srcQueueChan, cacheQueueChan)
 
 		// 针对不同的业务可配置不同的延迟处理时间
 		if aRule.DebounceTime > 0 {
@@ -160,20 +175,18 @@ func InSlice(v string, sl []string) bool {
 	return false
 }
 
-func (this *Watchdog) listen(rule *fsnotify.Rule, destChan chan *fsnotify.Event) {
+func (this *Watchdog) listen(rule *fsnotify.Rule, srcChan chan *fsnotify.Event, cacheChan chan *fsnotify.Event) {
+	// 先验证一下路径是否存在
+	if _, err := os.Stat(rule.MonitPath); err != nil {
+		this.Logger.Fatalf("Something wrong with monitor path: %s", err)
+	}
 	// 导入目录下原有文件，则调用fspolling
 	if InSlice(watcher.FS_POLL, this.watchers[rule.Biz]) {
-		err := watcher.NewFspollingWatcher(FS_POLL_INTERVAL).SetLogger(this.Logger).Listen(rule, destChan)
-		if err != nil {
-			this.Logger.Error("[FspollingWatcher.Listen] %s", err)
-		}
+		watcher.NewFspollingWatcher(this.db).SetLogger(this.Logger).Listen(rule, cacheChan)
 	}
 	// 监听文件变化，则调用fsnotify
 	if InSlice(watcher.FS_NOTIFY, this.watchers[rule.Biz]) {
-		err := watcher.NewFsnotifyWatcher().SetLogger(this.Logger).Listen(rule, destChan)
-		if err != nil {
-			this.Logger.Error("[FsnotifyWatcher.Listen] %s", err)
-		}
+		watcher.NewFsnotifyWatcher().SetLogger(this.Logger).Listen(rule, srcChan)
 	}
 }
 
@@ -184,27 +197,26 @@ func (this *Watchdog) debounce(rule *fsnotify.Rule, srcChan chan *fsnotify.Event
 		case e := <-srcChan:
 			eventChan, ok := debounceMap.Load(e.Name)
 			if !ok {
-				this.Logger.Debug("The debounce channel of %s is not hit", e.Name)
+				this.Logger.Debugf("The debounce channel of %s is not hit", e.Name)
 				// If not, add it to the debounce map
-				eventChan := make(chan *fsnotify.Event)
+				eventChan := make(chan *fsnotify.Event, 5)
 				debounceMap.Store(e.Name, eventChan)
-				this.Logger.Debug("Store %s to the debounce map", e.Name)
+				this.Logger.Debugf("Store %s to the debounce map", e.Name)
 
 				// Start the debounce handler
 				go this.debounceFsnotifyEvent(rule.DebounceTime, eventChan, func(event *fsnotify.Event) {
-					this.Logger.Info("Debounce %s event for %s ms: %s %s", rule.Biz, rule.DebounceTime, event.Op, event.Name)
+					this.Logger.Infof("Debounce %s event for %s: %s %s", rule.Biz, rule.DebounceTime, event.Op, event.Name)
 					debounceMap.Delete(event.Name)
-					this.Logger.Debug("Delete %s in the debounce map", event.Name)
+					this.Logger.Debugf("Delete %s in the debounce map", event.Name)
 					destChan <- event
-					return
 				})
 
 				eventChan <- e
-				this.Logger.Debug("Publish %s to the debounce channel", e.Name)
+				this.Logger.Debugf("Publish %s to the debounce channel", e.Name)
 			} else {
 				// Publish the event to the channel of the debounce handler
 				eventChan.(chan *fsnotify.Event) <- e
-				this.Logger.Debug("Publish %s to the debounce channel", e.Name)
+				this.Logger.Debugf("Publish %s to the debounce channel", e.Name)
 			}
 		}
 	}
@@ -220,6 +232,7 @@ func (this *Watchdog) debounceFsnotifyEvent(delay time.Duration, eventChan chan 
 	for {
 		select {
 		case e = <-eventChan:
+			this.Logger.Debugf("Consume event %s from the debounce channel", e.Name)
 			// timer may be not active, and fired
 			if !timer.Stop() && len(timer.C) > 0 {
 				<-timer.C //ctry to drain from the channel
@@ -227,9 +240,11 @@ func (this *Watchdog) debounceFsnotifyEvent(delay time.Duration, eventChan chan 
 			timer.Reset(delay)
 		case <-timer.C:
 			// fmt.Println(time.Now(), ":timer expired")
-			if e != nil {
-				cb(e)
+			// fix: 定时器率先触发，引发`eventChan`通道死锁问题
+			if len(eventChan) > 0 || e == nil {
+				continue
 			}
+			cb(e)
 			return
 		}
 	}
@@ -291,7 +306,7 @@ func (this *Watchdog) handle(taskChan chan []*fsnotify.Event) {
 			}
 			wg.Wait()
 
-			this.Logger.Info("Finish %d tasks in %s", len(tasks), time.Since(start))
+			this.Logger.Infof("Finish %d tasks in %s", len(tasks), time.Since(start))
 		}
 	}
 }
@@ -374,21 +389,21 @@ func (this *Watchdog) fileProcessor(fevent *fsnotify.Event) {
 	fileMeta, err := this.GetFileMeta(fevent)
 	if err != nil {
 		// FindFirstFile D:\\I1000_testlog\\HP\\Matterhorn\\K2786401B\\NULL.txt: The system cannot find the file specified.
-		this.Logger.Warn("Fail to get origin file: %s", err)
+		this.Logger.Warnf("Fail to get origin file: %s", err)
 		// 如果是文件被删除了, 该咋办?
 		if err := this.hook.Listen("Handle404Error", this, fileMeta, fevent); err != nil {
-			this.Logger.Warn("Handle404Error hook throw exception: %s", err)
+			this.Logger.Warnf("Handle404Error hook throw exception: %s", err)
 			return
 		}
 	}
 	if fileMeta.Filepath == "" {
-		this.Logger.Warn("The fileMeta is an empty struct, please check the event: %s %s", fevent.Op, fevent.Name)
+		// this.Logger.Warn("The fileMeta is an empty struct, please check the event: %s %s", fevent.Op, fevent.Name)
 		return
 	}
 
 	// 支持Agent层级的清洗操作
 	if err := this.hook.Listen("CheckFile", this, fileMeta); err != nil {
-		this.Logger.Warn("CheckFile hook throw exception: %s", err)
+		this.Logger.Warnf("CheckFile hook throw exception: %s", err)
 		// 如果报文件不完整，那稍后应该还会有写入事件产生，所以暂不做处理
 		return
 	}
@@ -399,21 +414,26 @@ func (this *Watchdog) fileProcessor(fevent *fsnotify.Event) {
 	for _, Adapter := range this.adapters[fileMeta.LastOp.Biz] {
 		Adapter.SetLogger(this.Logger)
 		if err := Adapter.Handle(*fileMeta); err != nil {
-			this.Logger.Error("Adapter.Handle throw exception: %s", err)
+			this.Logger.Errorf("Adapter.Handle throw exception: %s", err)
 			failure = true
 			break
 		}
 	}
 	if failure {
-		this.Logger.Error("Need to rollback file: %s", fileMeta.Filepath)
+		this.Logger.Errorf("Need to rollback file: %s", fileMeta.Filepath)
 		// 文件处理异常时需要将该文件事件传送至异常处理通道
 		this.rollback(fileMeta)
 		return
 	}
 
-	// 记录文件最新的md5值
-	this.cache.Put(fevent.Name, fileMeta.ModifyTime.String(), 0)
-	this.Logger.Debug("Cache key: %s, value: %s, timeout: 0", fevent.Name, this.cache.Get(fevent.Name))
+	// 记录文件更新状态
+	err = this.db.Update(func(txn *badger.Txn) error {
+		t, _ := fileMeta.ModifyTime.GobEncode()
+		return txn.Set([]byte(fevent.Name), t)
+	})
+	if err != nil {
+		this.Logger.Errorf("Fail to update badger: %s", err)
+	}
 }
 
 func (this *Watchdog) rollback(file *handler.FileMeta) {

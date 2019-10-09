@@ -24,7 +24,7 @@ func (this *BSI) Transform(watchDog *watchdog.Watchdog, file *handler.FileMeta) 
 	if file.LastOp.Biz != this.Name() {
 		return nil
 	}
-	watchDog.Logger.Debug(this.Name() + " Transform")
+	watchDog.Logger.Debugf(this.Name() + " Transform")
 
 	// 扩展代码...
 	// file_date作为分区键，应该是相对稳定的，取文件相关的创建时间/修改时间/访问时间都不理想，
@@ -44,20 +44,20 @@ func (this *BSI) Transform(watchDog *watchdog.Watchdog, file *handler.FileMeta) 
 	// testID := matched[4]
 
 	pathArray := strings.Split(file.SubDir, "/")
-	if len(pathArray) != 4 {
+	if len(pathArray) != 4 && len(pathArray) != 5 {
 		return nil
 	}
 
 	testID := pathArray[len(pathArray)-1]
-	file.FolderTime = convert2Time(testID)
+	file.FolderTime = this.convert2Time(testID)
 	// 考虑到BSI业务中压缩文件存在重复创建的情况，为了保证Cassandra中数据记录的唯一性，特将文件的创建时间设置为文件目录的时间
 	file.CreateTime = file.FolderTime
 
 	return nil
 }
 
-func convert2Time(str string) time.Time {
-	// Strategy1: MBBIVS171700094_1W_1_2017-06-07_16_15_42_797
+func (this *BSI) convert2Time(str string) time.Time {
+	// MBBIVS171700094_1W_1_2017-06-07_16_15_42_797
 	testTime := str[(len(str) - 23):]
 	datetimeArray := strings.Split(testTime, "_")
 	dateArray := strings.Split(datetimeArray[0], "-")
