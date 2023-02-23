@@ -22,6 +22,6 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/tebeka/strftime v0.1.3 // indirect
-	golang.org/x/text v0.3.2
+	golang.org/x/text v0.3.8
 	gopkg.in/ini.v1 v1.48.0 // indirect
 )
